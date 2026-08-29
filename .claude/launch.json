@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "colab-preview",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd '/private/tmp/claude-501/-Users-saito-Desktop-colab-app/e66583e4-2aae-4b91-9ee7-0824dc319c6f/scratchpad/colab-preview' && exec python3 -m http.server 4173"],
+      "port": 4173
+    }
+  ]
+}
