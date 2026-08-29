@@ -14,6 +14,19 @@ El visualizador se unificó adentro de esta misma carpeta y se reemplazó el sta
 
 Se instaló Node.js (vía `nvm`, LTS) y `pnpm` (vía `corepack`) en esta Mac, agregado a `~/.zshrc`. Para levantar el visualizador: `pnpm install` (una vez) y después `pnpm dev`, que sirve en `http://localhost:5173/`. Verificado que arranca y sirve `ColabApp.jsx` sin errores de sintaxis tras la reorganización.
 
+## Auditoría del flujo del artista (misma sesión, 29 de agosto de 2026)
+
+Con el visualizador ya funcionando, se recorrieron de punta a punta los flujos de grabar, hacer/producción completa, mezclar, especial (operador de show) y pedidos escritos con errores/lunfardo — probados ejecutando la lógica real de `interpretFallback`/`pickProducers`/etc. con casos concretos en Node, y con Playwright manejando el visualizador en un navegador real (Chromium), no sólo lectura de código. Se encontraron y corrigieron 4 bugs de lógica (detalle del porqué de cada uno en el mensaje del commit `b9485b7`):
+
+1. El regex de horario en pedidos especiales confundía cualquier número suelto del texto (cantidad de gente, un teléfono) con una hora, y saltaba la pregunta de fecha/horario cuando en realidad faltaba.
+2. El chat previo a la oferta cortaba al artista en 3 mensajes reales en vez de los 4 que promete el contador en pantalla, porque el productor simulado arranca la conversación con una pregunta que ya cuenta como su primer mensaje.
+3. Pedir una aclaración durante la recuperación (cuando nadie respondió) descartaba los géneros ya confirmados del pedido original al rebuscar productores.
+4. Al editar un pedido publicado, dos de los cinco pasos de revisión (maqueta/referencia, y el dato faltante de pedidos especiales) no se volvían a mostrar como los otros tres (modalidad, ubicación/horario, géneros) — se saltaban en silencio.
+
+**Quedó pendiente, no corregido** (no es un bug de lógica sino una ambigüedad de producto, para no reabrir una decisión sin el equipo): cuando el texto libre ya menciona un artista de referencia (ej. "estilo Duki"), el paso de "Maqueta o referencia" se saltea directo sin ofrecer adjuntar audio o un link — hoy el código trata "mencionó un artista" como equivalente a "ya no hace falta preguntar por una referencia", pero adjuntar una maqueta real es un dato distinto de nombrar un estilo. Vale la pena confirmar con Bato si el paso debería mostrarse igual (como pasa con géneros, que sí se pre-completa pero igual se pide confirmar) o si el salteo actual es intencional.
+
+Herramientas usadas sólo para esta verificación (Node + Playwright/Chromium, instalados en una carpeta aparte fuera del repo) no quedaron como dependencia del proyecto ni se commitearon — es tooling de sesión, no parte de la app.
+
 ## Estado del prototipo del artista
 
 El Build 5 de `app/ColabApp.jsx` suma edición de un pedido ya publicado sobre la lógica auditada del Build 4:
