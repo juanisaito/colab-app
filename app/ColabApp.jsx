@@ -131,6 +131,15 @@ function normalizeClassification(obj) {
   return out;
 }
 
+// Corta en el último espacio antes del límite para no partir una palabra al
+// medio (ej. "termi…" en vez de "terminada…").
+function truncateAtWord(text, maxLen) {
+  if (text.length <= maxLen) return text;
+  const cut = text.slice(0, maxLen);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut) + "…";
+}
+
 // Fallback local determinístico: se usa solo si la llamada a la API falla o
 // devuelve algo inválido. Conserva datos explícitos básicos y, ante un pedido
 // ambiguo, pide reformular en lugar de inventar una intención.
@@ -194,7 +203,7 @@ function interpretFallback(text) {
   return normalizeClassification({
     tipo,
     title: titleByTipo[tipo],
-    summary: text.length > 110 ? text.slice(0, 110) + "…" : text,
+    summary: truncateAtWord(text, 110),
     modalidad,
     modalidad_fuente,
     dateText: dateMatch ? dateMatch[0] : null,
@@ -730,7 +739,12 @@ function Screen({ topSlot, children }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "20px 22px 0", minHeight: 20 }}>{topSlot || null}</div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 22px 26px" }}>{children}</div>
+      {/* minHeight: 0 + "safe center": un flex item con flex:1 no se achica por
+          debajo del alto de su contenido si no se le pone minHeight:0 — sin
+          esto, una pantalla larga (ej. la lista completa de zonas) crece más
+          allá de lo disponible y "centrarla" la deja por fuera del viewport,
+          tapando el "‹ Atrás" de arriba sin poder scrollear para verlo. */}
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "safe center", padding: "0 22px 26px" }}>{children}</div>
     </div>
   );
 }
@@ -1521,7 +1535,7 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
         </div>
       </div>
 
-      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "16px 22px 8px" }}>
+      <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 22px 8px" }}>
         {mensajes.map((m, i) => (
           <div key={i} style={{ display: "flex", justifyContent: m.from === "artista" ? "flex-end" : "flex-start", marginBottom: 10 }}>
             <div
@@ -1673,7 +1687,7 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
           {actionError && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, marginTop: 14 }}>{actionError}</p>}
         </div>
       ) : feedVacio && recovery === "curada" ? (
-        <div style={{ flex: 1, overflowY: "auto", padding: "8px 22px 26px" }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
           <h2 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 19, color: COLORS.text, margin: "0 0 10px", lineHeight: 1.3 }}>
             Algunas opciones con horario disponible
           </h2>
@@ -1697,7 +1711,7 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
           {actionError && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, marginTop: 14 }}>{actionError}</p>}
         </div>
       ) : feedVacio ? (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", padding: "0 26px 26px" }}>
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "safe center", alignItems: "center", textAlign: "center", padding: "0 26px 26px" }}>
           <h2 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 21, color: COLORS.text, margin: "0 0 10px", lineHeight: 1.3 }}>
             Tu proyecto ya está en movimiento
           </h2>
@@ -1708,7 +1722,7 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
           </p>
         </div>
       ) : (
-        <div style={{ flex: 1, overflowY: "auto", padding: "8px 22px 26px" }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
           <h2 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 19, color: COLORS.text, margin: "0 0 20px", lineHeight: 1.3 }}>
             Tu proyecto ya está en movimiento
           </h2>
@@ -1768,7 +1782,7 @@ function OfferDetail({ offer, onBack, onChoose, onMessage, choosing, messaging, 
         <TextLink onClick={onBack}>‹ Atrás</TextLink>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 22px 12px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 22px 12px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
           <ProducerPhoto name={offer.productor} width={52} height={52} radius={12} />
           <div>
@@ -2371,7 +2385,12 @@ export default function App() {
           </div>
         )}
 
-        <div style={{ position: "relative", zIndex: 1, flex: 1, overflowY: "auto" }}>{body}</div>
+        {/* minHeight: 0 es necesario para que este contenedor realmente se
+            recorte a su alto disponible y scrollee — sin esto, un flex item
+            con overflow no se achica por debajo del alto de su contenido, y
+            una pantalla larga (ej. la lista completa de zonas) termina
+            centrada por fuera del viewport, tapando el "‹ Atrás" de arriba. */}
+        <div style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, overflowY: "auto" }}>{body}</div>
       </div>
     </div>
   );
