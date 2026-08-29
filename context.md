@@ -81,8 +81,8 @@ La respuesta determina una pantalla breve y contextual, no un cuestionario gener
 
 COLAB infiere que busca una experiencia presencial y un productor con espacio para grabar. La siguiente pantalla ofrece controles simples:
 
-- Ubicación: **Cerca mío**, **Toda CABA** o **Elegir zona**.
-- Franja: **Mañana**, **Tarde**, **Noche** o **Me da igual**.
+- Ubicación: **Cerca mío** o **Elegir zona**.
+- Franja: **Mañana**, **Tarde**, **Noche** o **Me adapto**.
 
 No se pregunta si tiene estudio, equipo, cuántas horas necesita ni qué debe aportar el productor.
 
@@ -90,7 +90,7 @@ No se pregunta si tiene estudio, equipo, cuántas horas necesita ni qué debe ap
 
 Existe una ambigüedad real y se pregunta una sola cosa:
 
-- **Presencial**, **Online** o **Me da igual**.
+- **Presencial**, **Online** o **Puedo de las dos formas**.
 
 Si corresponde, se muestran ubicación y franja en la misma pantalla.
 
@@ -470,7 +470,7 @@ Abrir por zonas sólo cuando exista suficiente densidad de artistas y productore
 
 ## Actualización del prototipo — 29 de agosto de 2026
 
-Cambios de código en `colab-artista_2.jsx` (Build 5), a partir de la decisión de la reunión del 29 de agosto de habilitar edición de pedidos tras el envío.
+Cambios de código en `app/ColabApp.jsx` (Build 5), a partir de la decisión de la reunión del 29 de agosto de habilitar edición de pedidos tras el envío.
 
 ### Edición de pedidos publicados
 
