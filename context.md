@@ -6,9 +6,13 @@ Actualizado: 29 de agosto de 2026.
 
 A partir de esta sesión, `/Users/saito/Desktop/colab app/` es la carpeta única del proyecto y tiene control de versiones real (`git`). Antes de esto había copias sueltas sin historial: `colabapp v5.jsx` acá, `colab-artista_1.jsx` a `colab-artista_5.jsx` y `colabapp v4` en Descargas, y una copia aparte del visualizador (`colab-preview/`, generada con Codex/OpenAI) desactualizada en Build 4. Esas copias de Descargas quedan sin tocar como respaldo, pero **el archivo fuente único de acá en más es `app/ColabApp.jsx`** — ya no existe un `.jsx` suelto en la raíz ni un `context vN.md` con número de versión; el historial de versiones lo lleva git.
 
-El visualizador (`colab-preview`) se unificó adentro de esta misma carpeta: `app/ColabApp.jsx`, `app/page.tsx`, `app/layout.tsx` y el resto de la config (`package.json`, `vite.config.ts`, etc.) en la raíz del proyecto. Ya no hay que sincronizar dos copias a mano.
+El visualizador se unificó adentro de esta misma carpeta y se reemplazó el stack pesado que traía (Next.js vía `vinext`, Cloudflare Workers, bindings D1/R2, `wrangler` — nada de eso hacía falta para un componente cliente puro que sólo usa `localStorage`) por un proyecto **Vite + React** mínimo:
 
-**Pendiente importante:** esta Mac no tiene Node.js/npm/pnpm instalado, así que todavía no pude instalar dependencias ni levantar el servidor de desarrollo para confirmar que el visualizador arranca después de la reorganización. Además, el stack que trae `colab-preview` (Next.js vía `vinext`, Cloudflare Workers, bindings D1/R2, `wrangler`) es más pesado de lo que este prototipo necesita — es un componente cliente puro que sólo usa `localStorage`, sin servidor ni base de datos real. Queda como decisión pendiente si simplificamos ese visualizador a un proyecto Vite + React liviano (arranca más rápido, no requiere cuenta de Cloudflare) o si se mantiene el stack actual tal cual está.
+- `index.html` → `app/main.jsx` (monta `<App />`) → `app/ColabApp.jsx` (el componente, sin cambios de lógica).
+- `app/index.css` reemplaza al `globals.css` con Tailwind (no se usaba: todos los estilos del prototipo son inline o vienen del `<style>` propio del componente).
+- Config: `vite.config.js`, `package.json` con sólo `react`, `react-dom`, `vite` y `@vitejs/plugin-react`.
+
+Se instaló Node.js (vía `nvm`, LTS) y `pnpm` (vía `corepack`) en esta Mac, agregado a `~/.zshrc`. Para levantar el visualizador: `pnpm install` (una vez) y después `pnpm dev`, que sirve en `http://localhost:5173/`. Verificado que arranca y sirve `ColabApp.jsx` sin errores de sintaxis tras la reorganización.
 
 ## Estado del prototipo del artista
 

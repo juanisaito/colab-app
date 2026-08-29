@@ -4,8 +4,8 @@
     {
       "name": "colab-preview",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "cd '/Users/saito/Desktop/colab app' && exec pnpm dev"],
-      "port": 3000
+      "runtimeArgs": ["-c", "cd '/Users/saito/Desktop/colab app' && exec pnpm dev -- --port 5173"],
+      "port": 5173
     }
   ]
 }
