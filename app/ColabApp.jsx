@@ -165,7 +165,13 @@ function interpretFallback(text) {
   }
 
   const dateMatch = text.match(/\b(hoy|mañana|pasado mañana|lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo|este fin de semana|el fin de semana)\b/i);
-  const timeMatch = text.match(/\b(?:a las\s*)?([01]?\d|2[0-3])(?::([0-5]\d))?\s*(?:h|hs|horas)?\b/i);
+  // Un número suelto (ej. "15 personas", "11-2233-4455") no alcanza para asumir un
+  // horario: exigimos "a las", minutos con ":" o el sufijo horario, para no inventar
+  // una hora que el artista no dijo.
+  const timeMatch =
+    text.match(/\ba las\s*([01]?\d|2[0-3])(?::([0-5]\d))?\s*(?:h|hs|horas)?\b/i) ||
+    text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\s*(?:h|hs|horas)?\b/i) ||
+    text.match(/\b([01]?\d|2[0-3])\s*(?:h|hs|horas)\b/i);
   // "mañana" sola se interpreta como día, no como franja. Para la franja de
   // mañana exigimos una formulación explícita como "por la mañana".
   const slotMatch = text.match(/\b(a la mañana|por la mañana|de mañana|a la tarde|por la tarde|tarde|a la noche|por la noche|noche)\b/i);
@@ -998,14 +1004,14 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState(null);
   const [datoFaltanteTexto, setDatoFaltanteTexto] = useState(initialContext?.datoFaltanteTexto ?? "");
-  const [datoFaltanteConfirmado, setDatoFaltanteConfirmado] = useState(!!initialContext?.datoFaltanteConfirmado);
+  const [datoFaltanteConfirmado, setDatoFaltanteConfirmado] = useState(!!initialContext?.datoFaltanteConfirmado && !reviewExisting);
 
   const [referenciaLink, setReferenciaLink] = useState(initialContext?.referenciaLink ?? "");
   const [archivoAdjunto, setArchivoAdjunto] = useState(!!initialContext?.archivoAdjunto);
   const [archivoNombre, setArchivoNombre] = useState(initialContext?.archivoNombre ?? null);
   const [audioAdjunto, setAudioAdjunto] = useState(!!initialContext?.audioAdjunto);
   const [adjuntando, setAdjuntando] = useState(null);
-  const [referenciaConfirmada, setReferenciaConfirmada] = useState(!!initialContext?.referenciaOfrecida);
+  const [referenciaConfirmada, setReferenciaConfirmada] = useState(!!initialContext?.referenciaOfrecida && !reviewExisting);
   const [showProtection, setShowProtection] = useState(false);
   const [generos, setGeneros] = useState(initialContext?.generos || []);
   const [generosConfirmados, setGenerosConfirmados] = useState(!!initialContext?.generosConfirmados && !reviewExisting);
@@ -1379,12 +1385,18 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
   const [sending, setSending] = useState(false);
   const [requestingOffer, setRequestingOffer] = useState(false);
   const [conversationError, setConversationError] = useState(null);
+  const [offerJustGenerated, setOfferJustGenerated] = useState(false);
   const scrollRef = useRef(null);
   const replyTimerRef = useRef(null);
 
   const misMensajes = mensajes.filter((m) => m.from === "artista").length;
   const mensajesProductor = mensajes.filter((m) => m.from === "productor").length;
   const atLimit = misMensajes >= MAX_PRE_OFFER_MESSAGES_PER_PERSON;
+  // El productor arranca la conversación con una pregunta "gratis" que ya cuenta
+  // como uno de sus cuatro mensajes. Por eso su límite se cumple un mensaje antes
+  // que el del artista: la oferta puede generarse automáticamente sin que el
+  // artista haya llegado todavía a su propio límite visible.
+  const offerAvailable = formalOfferExists || offerJustGenerated;
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -1447,7 +1459,7 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
         setMensajes(withProductor);
         setSending(false);
         replyTimerRef.current = null;
-        if (!formalOfferExists && withProductor.filter((m) => m.from === "productor").length >= MAX_PRE_OFFER_MESSAGES_PER_PERSON) {
+        if (!offerAvailable && withProductor.filter((m) => m.from === "productor").length >= MAX_PRE_OFFER_MESSAGES_PER_PERSON) {
           await generateFormalOffer();
         }
       } else {
@@ -1460,7 +1472,12 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
 
   // En el flujo vigente decide el productor: la oferta se genera después de
   // reunir suficiente información, no porque el artista la fuerce con un botón.
+  // No saca al artista del chat: como el productor arranca con una pregunta que
+  // ya cuenta como su primer mensaje, este momento puede llegar antes de que el
+  // artista haya usado sus propios cuatro mensajes, y sacarlo de golpe se los
+  // cortaría sin aviso.
   async function generateFormalOffer() {
+    if (offerAvailable) return;
     if (replyTimerRef.current) {
       clearTimeout(replyTimerRef.current);
       replyTimerRef.current = null;
@@ -1484,6 +1501,7 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
       setConversationError("No pudimos generar la propuesta. Probá de nuevo.");
       return;
     }
+    setOfferJustGenerated(true);
     onOfferGenerated();
   }
 
@@ -1527,7 +1545,7 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
       <div style={{ padding: "8px 22px 20px" }}>
         {atLimit && (
           <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12, marginBottom: 8 }}>
-            {formalOfferExists
+            {offerAvailable
               ? `Llegaste al límite de ${MAX_PRE_OFFER_MESSAGES_PER_PERSON} mensajes. Ya podés volver a la propuesta y decidir.`
               : `Llegaste al límite de ${MAX_PRE_OFFER_MESSAGES_PER_PERSON} mensajes. Si ${interes.productor} avanza, su propuesta aparece en el pedido.`}
           </p>
@@ -1551,7 +1569,7 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
             </PrimaryButton>
           )}
           <PrimaryButton full disabled={requestingOffer || sending} onClick={onBack}>
-            {requestingOffer ? "Preparando propuesta…" : formalOfferExists ? "Volver a la propuesta" : "Volver al pedido"}
+            {requestingOffer ? "Preparando propuesta…" : offerAvailable ? "Volver a la propuesta" : "Volver al pedido"}
           </PrimaryButton>
         </div>
       </div>
@@ -2136,12 +2154,14 @@ export default function App() {
   }
 
   async function handleAclaracion(textoAclaracion) {
-    const generosNuevos = detectGeneros(textoAclaracion);
     const all = (await storageGet(REQUESTS_KEY, true)) || [];
     const mine = all.find((r) => r.id === request.id);
     if (!mine) return;
-    const { productores, ampliado } = pickProducers(mine.tipo, generosNuevos, mine);
-    const updated = all.map((r) => (r.id === request.id ? { ...r, recovery: null, curados: [], matchAmpliado: ampliado, tieneReferencia: true } : r));
+    // La aclaración suma información, no la reemplaza: se combinan los géneros ya
+    // confirmados del pedido original con lo nuevo que se detecte en el texto.
+    const generos = Array.from(new Set([...(mine.generos || []), ...detectGeneros(textoAclaracion)]));
+    const { productores, ampliado } = pickProducers(mine.tipo, generos, mine);
+    const updated = all.map((r) => (r.id === request.id ? { ...r, recovery: null, curados: [], matchAmpliado: ampliado, tieneReferencia: true, generos } : r));
     const ok = await storageSet(REQUESTS_KEY, updated, true);
     if (!ok) return false;
     scheduleSimulatedProducers({ id: request.id }, productores);
@@ -2265,7 +2285,7 @@ export default function App() {
   } else if (selectedOffer) {
     body = <OfferDetail offer={selectedOffer} choosing={choosing} messaging={messaging} chooseError={chooseError} onBack={() => { setSelectedOffer(null); setChooseError(null); }} onMessage={() => handleMessageOffer(selectedOffer)} onChoose={() => handleChoose(selectedOffer)} />;
   } else if (openInteres) {
-    body = <ConversationScreen request={request} interes={openInteres} formalOfferExists={!!conversationReturnOffer || !!openInteres.formalOfferExists} onBack={closeConversation} onOfferGenerated={() => setOpenInteres(null)} />;
+    body = <ConversationScreen request={request} interes={openInteres} formalOfferExists={!!conversationReturnOffer || !!openInteres.formalOfferExists} onBack={closeConversation} onOfferGenerated={() => {}} />;
   } else if (request && !editingLiveRequestId) {
     body = (
       <WaitingScreen
