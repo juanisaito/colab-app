@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { COLORS } from "./theme.js";
+import BottomNav from "./BottomNav.jsx";
+import { HomeScreen, OrdersScreen, MessagesScreen, ProfileScreen, HelpScreen, PrivacyScreen, EditNameScreen } from "./RootScreens.jsx";
 
 /* ============================================================
    COLAB — prototipo navegable del flujo del artista
@@ -10,18 +13,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
    Ver context.md para el historial completo de decisiones.
    ============================================================ */
 
-const COLORS = {
-  bg: "#0B0B0C",
-  surface: "#17171A",
-  surfaceAlt: "#1F1F23",
-  border: "#2A2A2E",
-  text: "#F3F2EE",
-  muted: "#8F8D91",
-  accent: "#2E4BFF",
-};
-
-const PROFILE_KEY = "colab-preview-profile-v3";
-const REQUESTS_KEY = "colab-preview-requests-v3";
+export const PROFILE_KEY = "colab-preview-profile-v3";
+export const REQUESTS_KEY = "colab-preview-requests-v3";
 
 // Punto 8: contador configurable de mensajes previos a la oferta.
 const MAX_PRE_OFFER_MESSAGES_PER_PERSON = 4;
@@ -35,20 +28,20 @@ const SIMULATED_PRICING_CONFIG = {
   status: "simulado — fórmula real de COLAB todavía no definida",
   commissionRateForPrototypeOnly: 0.10,
 };
-function calculateArtistFinalPrice(producerAmount) {
+export function calculateArtistFinalPrice(producerAmount) {
   const { commissionRateForPrototypeOnly } = SIMULATED_PRICING_CONFIG;
   return Math.round((producerAmount * (1 + commissionRateForPrototypeOnly)) / 100) * 100;
 }
 
-function uid() {
+export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-function formatMoney(n) {
+export function formatMoney(n) {
   return "$" + (Number(n) || 0).toLocaleString("es-AR");
 }
 
-async function storageGet(key, shared) {
+export async function storageGet(key, shared) {
   try {
     if (window.storage?.get) {
       const res = await window.storage.get(key, shared);
@@ -61,7 +54,7 @@ async function storageGet(key, shared) {
   }
 }
 
-async function storageSet(key, value, shared) {
+export async function storageSet(key, value, shared) {
   try {
     if (window.storage?.set) await window.storage.set(key, JSON.stringify(value), shared);
     else window.localStorage.setItem(key, JSON.stringify(value));
@@ -562,7 +555,7 @@ function findProducerByName(name) {
 
 /* ---------------- piezas visuales ---------------- */
 
-function PrimaryButton({ children, onClick, disabled, full }) {
+export function PrimaryButton({ children, onClick, disabled, full }) {
   return (
     <button
       onClick={onClick}
@@ -586,7 +579,7 @@ function PrimaryButton({ children, onClick, disabled, full }) {
   );
 }
 
-function SecondaryButton({ children, onClick, disabled, full }) {
+export function SecondaryButton({ children, onClick, disabled, full }) {
   return (
     <button
       onClick={onClick}
@@ -610,7 +603,7 @@ function SecondaryButton({ children, onClick, disabled, full }) {
   );
 }
 
-function TextLink({ children, onClick, disabled }) {
+export function TextLink({ children, onClick, disabled }) {
   return (
     <button
       onClick={onClick}
@@ -633,7 +626,7 @@ function TextLink({ children, onClick, disabled }) {
   );
 }
 
-function Label({ children }) {
+export function Label({ children }) {
   return (
     <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 0.6, color: COLORS.muted, marginBottom: 8, textTransform: "uppercase" }}>
       {children}
@@ -712,7 +705,7 @@ const underlineInputStyle = {
   boxSizing: "border-box",
 };
 
-function UnderlineField({ value, onChange, placeholder, autoFocus, onKeyDown, multiline, disabled, small, type = "text" }) {
+export function UnderlineField({ value, onChange, placeholder, autoFocus, onKeyDown, multiline, disabled, small, type = "text" }) {
   const [focused, setFocused] = useState(false);
   const Tag = multiline ? "textarea" : "input";
   return (
@@ -735,7 +728,7 @@ function UnderlineField({ value, onChange, placeholder, autoFocus, onKeyDown, mu
   );
 }
 
-function Screen({ topSlot, children }) {
+export function Screen({ topSlot, children }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "20px 22px 0", minHeight: 20 }}>{topSlot || null}</div>
@@ -755,7 +748,7 @@ function hashHue(str) {
   return Math.abs(h) % 360;
 }
 
-function ProducerPhoto({ name, width = 44, height = 44, radius = 10 }) {
+export function ProducerPhoto({ name, width = 44, height = 44, radius = 10 }) {
   const hue = hashHue(name);
   return (
     <div
@@ -901,7 +894,7 @@ function Gate({ onDone }) {
 
 /* ---------------- pantalla: inicio + búsqueda por IA ---------------- */
 
-function AnimatedExamples({ examples }) {
+export function AnimatedExamples({ examples }) {
   const [displayed, setDisplayed] = useState("");
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState("typing");
@@ -937,9 +930,10 @@ function AnimatedExamples({ examples }) {
   );
 }
 
-function StartScreen({ onSubmit, interpreting, error, initialText, onCancelLiveEdit }) {
+function StartScreen({ onSubmit, interpreting, error, initialText, onExit, exitLabel, confirmExitBeforeDiscard }) {
   const [text, setText] = useState(initialText || "");
   const [focused, setFocused] = useState(false);
+  const [confirmingExit, setConfirmingExit] = useState(false);
   // Punto 6: solo los 4 casos principales entre los ejemplos. Tuner/sonidista/
   // camps funcionan si se escriben, pero no aparecen acá.
   const examples = ["Quiero grabar una canción", "Quiero hacer una canción", "Quiero terminar un tema", "Quiero mezclar mi canción"];
@@ -947,8 +941,25 @@ function StartScreen({ onSubmit, interpreting, error, initialText, onCancelLiveE
   const showAnimated = text.length === 0 && !focused;
   const showStaticHint = text.length === 0 && focused;
 
+  function handleExitClick() {
+    if (confirmExitBeforeDiscard) setConfirmingExit(true);
+    else onExit();
+  }
+
   return (
-    <Screen topSlot={onCancelLiveEdit ? <TextLink onClick={onCancelLiveEdit}>‹ Volver a mi pedido</TextLink> : null}>
+    <Screen
+      topSlot={
+        !onExit ? null : confirmingExit ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 13, color: COLORS.muted }}>¿Salir sin guardar tu pedido?</span>
+            <TextLink onClick={onExit}>Sí, salir</TextLink>
+            <TextLink onClick={() => setConfirmingExit(false)}>Seguir</TextLink>
+          </div>
+        ) : (
+          <TextLink onClick={handleExitClick}>{exitLabel}</TextLink>
+        )
+      }
+    >
       <h1 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 27, color: COLORS.text, lineHeight: 1.2, margin: "0 0 8px" }}>
         Tu próxima canción, en marcha.
       </h1>
@@ -1390,7 +1401,7 @@ const CANNED_PRODUCER_REPLIES = [
   "Perfecto, con eso ya entiendo mejor por dónde encararlo.",
 ];
 
-function ConversationScreen({ request, interes, onBack, onOfferGenerated, formalOfferExists = false }) {
+function ConversationScreen({ request, interes, onBack, onOfferGenerated, formalOfferExists = false, returnLabel }) {
   const initialMessages = interes.mensajes?.length
     ? interes.mensajes
     : [{ from: "productor", text: interes.pregunta, createdAt: interes.createdAt || new Date().toISOString() }];
@@ -1583,7 +1594,7 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
             </PrimaryButton>
           )}
           <PrimaryButton full disabled={requestingOffer || sending} onClick={onBack}>
-            {requestingOffer ? "Preparando propuesta…" : offerAvailable ? "Volver a la propuesta" : "Volver al pedido"}
+            {requestingOffer ? "Preparando propuesta…" : returnLabel ? returnLabel : offerAvailable ? "Volver a la propuesta" : "Volver al pedido"}
           </PrimaryButton>
         </div>
       </div>
@@ -1593,12 +1604,13 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
 
 /* ---------------- pantalla: espera + feed + recuperación (punto 5) ---------------- */
 
-function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit, onAclaracion, onSolicitarCurado }) {
+function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit, onAclaracion, onSolicitarCurado, onBack }) {
   const [intereses, setIntereses] = useState([]);
   const [ofertas, setOfertas] = useState([]);
   const [curados, setCurados] = useState([]);
   const [ampliado, setAmpliado] = useState(false);
   const [recovery, setRecovery] = useState(null);
+  const [estado, setEstado] = useState(request.estado);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [aclaracionTexto, setAclaracionTexto] = useState("");
@@ -1615,6 +1627,7 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
       setCurados(mine.curados || []);
       setAmpliado(!!mine.matchAmpliado);
       setRecovery(mine.recovery || null);
+      setEstado(mine.estado);
     }
   }, [request.id]);
 
@@ -1656,7 +1669,14 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ padding: "20px 22px 0", minHeight: 20 }}>
-        {confirmingCancel ? (
+        <div style={{ marginBottom: 10 }}>
+          <TextLink disabled={cancelling} onClick={onBack}>‹ Atrás</TextLink>
+        </div>
+        {estado === "cancelado" ? (
+          <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 0.6, color: COLORS.muted, textTransform: "uppercase" }}>
+            Pedido cancelado
+          </span>
+        ) : confirmingCancel ? (
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 13, color: COLORS.muted }}>¿Cancelar este pedido?</span>
             <TextLink disabled={cancelling} onClick={confirmarCancelacion}>{cancelling ? "Cancelando…" : "Sí, cancelar"}</TextLink>
@@ -1670,7 +1690,13 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
         )}
       </div>
 
-      {feedVacio && recovery === "aclaracion" ? (
+      {feedVacio && estado === "cancelado" ? (
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "safe center", alignItems: "center", textAlign: "center", padding: "0 26px 26px" }}>
+          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>
+            Este pedido fue cancelado. Ya no se están buscando productores para él.
+          </p>
+        </div>
+      ) : feedVacio && recovery === "aclaracion" ? (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 26px 26px" }}>
           <h2 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 20, color: COLORS.text, margin: "0 0 10px", lineHeight: 1.3 }}>
             Una aclaración más
@@ -1852,9 +1878,13 @@ function OfferDetail({ offer, onBack, onChoose, onMessage, choosing, messaging, 
   );
 }
 
-function ChosenScreen({ offer }) {
+function ChosenScreen({ offer, onBack }) {
   return (
-    <div style={{ padding: "50px 24px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ padding: "20px 22px 0", minHeight: 20 }}>
+        <TextLink onClick={onBack}>‹ Atrás</TextLink>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, padding: "30px 24px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", justifyContent: "safe center" }}>
       <div style={{ width: 44, height: 44, borderRadius: "50%", background: COLORS.accent, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
         <span style={{ color: "#fff", fontSize: 20, fontWeight: 700 }}>✓</span>
       </div>
@@ -1864,6 +1894,7 @@ function ChosenScreen({ offer }) {
       <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, maxWidth: 280 }}>
         Reserva, pago y coordinación de horario van en el próximo prototipo — esta pantalla es un placeholder de dónde continúa el flujo.
       </p>
+      </div>
     </div>
   );
 }
@@ -1937,6 +1968,12 @@ export default function App() {
   const [editingFromType, setEditingFromType] = useState(null);
   const [reviewingEdit, setReviewingEdit] = useState(false);
   const [editingLiveRequestId, setEditingLiveRequestId] = useState(null);
+  const [activeTab, setActiveTab] = useState("inicio");
+  const [startedCreating, setStartedCreating] = useState(false);
+  const [conversationOpenedFromMensajes, setConversationOpenedFromMensajes] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [editingProfileName, setEditingProfileName] = useState(false);
   const timers = useRef([]);
 
   useEffect(() => {
@@ -1964,6 +2001,7 @@ export default function App() {
       setClassification(result);
       setContextReviewRequired(true);
       setEditingFromType(null);
+      setStartedCreating(true);
     } catch (e) {
       setError("No pudimos interpretar el pedido. Probá de nuevo.");
     } finally {
@@ -1975,6 +2013,22 @@ export default function App() {
     setContext(ctx);
     setContextReviewRequired(false);
     setReviewingEdit(false);
+  }
+
+  // Descarta un pedido nuevo (no una edición) que todavía no se publicó.
+  // Se llega acá solo después de una clasificación exitosa, así que siempre
+  // hay progreso real para perder — StartScreen ya pide confirmación antes
+  // de llamar a esto.
+  function handleExitCreation() {
+    setClassification(null);
+    setContext(null);
+    setText("");
+    setError(null);
+    setContextReviewRequired(false);
+    setEditingFromType(null);
+    setReviewingEdit(false);
+    setStartedCreating(false);
+    setActiveTab("inicio");
   }
 
   function goBackToStart() {
@@ -2015,6 +2069,7 @@ export default function App() {
     setReviewingEdit(false);
     setEditingFromType(null);
     setEditingLiveRequestId(null);
+    setStartedCreating(false);
   }
 
   async function handlePublish() {
@@ -2054,6 +2109,8 @@ export default function App() {
       return;
     }
     setRequest(newRequest);
+    setStartedCreating(false);
+    setActiveTab("pedidos");
     scheduleSimulatedProducers(newRequest, productores);
   }
 
@@ -2072,6 +2129,7 @@ export default function App() {
     setEditingFromType(request.tipo);
     setReviewingEdit(true);
     setContextReviewRequired(true);
+    setStartedCreating(true);
   }
 
   function cancelLiveEdit() {
@@ -2258,6 +2316,13 @@ export default function App() {
     if (conversationReturnOffer) {
       setSelectedOffer(conversationReturnOffer);
       setConversationReturnOffer(null);
+      return;
+    }
+    // Si se abrió desde Mensajes (no desde el pedido ni desde una oferta),
+    // volver debe ir a la lista de Mensajes, no al detalle del pedido.
+    if (conversationOpenedFromMensajes) {
+      setRequest(null);
+      setConversationOpenedFromMensajes(false);
     }
   }
 
@@ -2289,17 +2354,97 @@ export default function App() {
     return true;
   }
 
+  // Abre el detalle de un pedido ya existente (desde Pedidos o desde el
+  // módulo "En movimiento" de Inicio). No dispara la simulación de
+  // productores de nuevo — eso solo pasa al publicar/editar/aclarar.
+  function handleOpenExistingRequest(requestObj) {
+    setClassification(null);
+    setContext(null);
+    if (requestObj.estado === "cerrado") {
+      const offer = (requestObj.ofertas || []).find((o) => o.id === requestObj.chosenOfferId) || null;
+      setChosenOffer(offer);
+      return;
+    }
+    setRequest(requestObj);
+  }
+
+  // Abre una conversación existente desde Mensajes, sin pasar por el detalle
+  // del pedido: se necesita `request` para poder seguir escribiendo (el chat
+  // guarda mensajes contra ese id), pero volver debe ir a Mensajes.
+  function handleOpenConversationFromMensajes(requestObj, interesObj) {
+    setClassification(null);
+    setContext(null);
+    setRequest(requestObj);
+    setConversationOpenedFromMensajes(true);
+    setOpenInteres(interesObj);
+  }
+
+  // Sale del detalle de un pedido (WaitingScreen). No alcanza con limpiar
+  // `request`: si se venía de publicar o actualizar recién, `classification`/
+  // `context` siguen con el valor del pedido que se acaba de guardar (nunca
+  // hacía falta limpiarlos antes porque WaitingScreen no tenía botón volver),
+  // y dejarlos así hace que al volver se vuelva a mostrar el resumen viejo.
+  function handleCloseRequestDetail() {
+    setRequest(null);
+    setClassification(null);
+    setContext(null);
+    setContextReviewRequired(false);
+    setEditingFromType(null);
+    setReviewingEdit(false);
+    setText("");
+  }
+
+  async function handleSaveProfileName(newName) {
+    const oldName = profile.name;
+    const updated = { ...profile, name: newName };
+    const ok = await storageSet(PROFILE_KEY, updated, false);
+    if (!ok) return false;
+    // Pedidos/Mensajes/Inicio filtran por artistName (no hay un id de usuario
+    // en este prototipo). Sin esta migración, cambiar el nombre artístico
+    // "perdería" el historial ya guardado con el nombre anterior.
+    if (newName !== oldName) {
+      const all = (await storageGet(REQUESTS_KEY, true)) || [];
+      const migrated = all.map((r) => (r.artistName === oldName ? { ...r, artistName: newName } : r));
+      await storageSet(REQUESTS_KEY, migrated, true);
+    }
+    setProfile(updated);
+    setEditingProfileName(false);
+    return true;
+  }
+
+  // No borra REQUESTS_KEY: cerrar sesión no elimina el historial local.
+  async function handleSignOut() {
+    await storageSet(PROFILE_KEY, null, false);
+    setProfile(null);
+    setActiveTab("inicio");
+  }
+
+  // Modo pestañas (barra inferior visible) vs. modo flujo (una pantalla
+  // interna, con su propia flecha de volver, sin barra). Cambiar de pestaña
+  // nunca toca classification/request/openInteres/etc., así que la pestaña
+  // activa persiste sola mientras se navega dentro de un pedido o chat.
+  const inFlowMode = startedCreating || !!request || !!openInteres || !!selectedOffer || !!chosenOffer || showHelp || showPrivacy || editingProfileName;
+
   let body = null;
   if (profile === undefined) {
     body = null;
   } else if (profile === null) {
     body = <Gate onDone={handleGateDone} />;
   } else if (chosenOffer) {
-    body = <ChosenScreen offer={chosenOffer} />;
+    body = <ChosenScreen offer={chosenOffer} onBack={() => setChosenOffer(null)} />;
   } else if (selectedOffer) {
     body = <OfferDetail offer={selectedOffer} choosing={choosing} messaging={messaging} chooseError={chooseError} onBack={() => { setSelectedOffer(null); setChooseError(null); }} onMessage={() => handleMessageOffer(selectedOffer)} onChoose={() => handleChoose(selectedOffer)} />;
   } else if (openInteres) {
-    body = <ConversationScreen request={request} interes={openInteres} formalOfferExists={!!conversationReturnOffer || !!openInteres.formalOfferExists} onBack={closeConversation} onOfferGenerated={() => {}} />;
+    body = (
+      <ConversationScreen
+        request={request}
+        interes={openInteres}
+        formalOfferExists={!!conversationReturnOffer || !!openInteres.formalOfferExists}
+        onBack={closeConversation}
+        onOfferGenerated={() => {}}
+        returnLabel={conversationOpenedFromMensajes ? "Volver a mensajes" : null}
+      />
+    );
   } else if (request && !editingLiveRequestId) {
     body = (
       <WaitingScreen
@@ -2310,6 +2455,7 @@ export default function App() {
         onEdit={handleEditRequest}
         onAclaracion={handleAclaracion}
         onSolicitarCurado={handleSolicitarCurado}
+        onBack={handleCloseRequestDetail}
       />
     );
   } else if (classification && context && !contextReviewRequired) {
@@ -2326,14 +2472,50 @@ export default function App() {
     );
   } else if (classification) {
     body = <ContextStep classification={classification} initialContext={context} reviewExisting={reviewingEdit} onComplete={handleContextComplete} onBack={goBackToStart} />;
-  } else {
+  } else if (startedCreating) {
+    // Se volvió al primer paso (texto libre) desde ContextStep, editando un
+    // pedido existente o re-escribiendo uno nuevo antes de reclasificar.
     body = (
       <StartScreen
         onSubmit={handleTextSubmit}
         interpreting={interpreting}
         error={error}
         initialText={text}
-        onCancelLiveEdit={editingLiveRequestId ? cancelLiveEdit : null}
+        onExit={editingLiveRequestId ? cancelLiveEdit : handleExitCreation}
+        exitLabel={editingLiveRequestId ? "‹ Volver a mi pedido" : "‹ Salir"}
+        confirmExitBeforeDiscard={!editingLiveRequestId}
+      />
+    );
+  } else if (showHelp) {
+    body = <HelpScreen artistName={profile.name} onBack={() => setShowHelp(false)} />;
+  } else if (showPrivacy) {
+    body = <PrivacyScreen onBack={() => setShowPrivacy(false)} />;
+  } else if (editingProfileName) {
+    body = <EditNameScreen currentName={profile.name} onSave={handleSaveProfileName} onBack={() => setEditingProfileName(false)} />;
+  } else if (activeTab === "pedidos") {
+    body = <OrdersScreen artistName={profile.name} onOpenRequest={handleOpenExistingRequest} onCreate={() => setActiveTab("inicio")} />;
+  } else if (activeTab === "mensajes") {
+    body = <MessagesScreen artistName={profile.name} onOpenConversation={handleOpenConversationFromMensajes} onGoToOrders={() => setActiveTab("pedidos")} />;
+  } else if (activeTab === "perfil") {
+    body = (
+      <ProfileScreen
+        profile={profile}
+        onEdit={() => setEditingProfileName(true)}
+        onHelp={() => setShowHelp(true)}
+        onPrivacy={() => setShowPrivacy(true)}
+        onSignOut={handleSignOut}
+      />
+    );
+  } else {
+    body = (
+      <HomeScreen
+        artistName={profile.name}
+        onSubmit={handleTextSubmit}
+        interpreting={interpreting}
+        error={error}
+        text={text}
+        onTextChange={setText}
+        onOpenRequest={handleOpenExistingRequest}
       />
     );
   }
@@ -2391,6 +2573,8 @@ export default function App() {
             una pantalla larga (ej. la lista completa de zonas) termina
             centrada por fuera del viewport, tapando el "‹ Atrás" de arriba. */}
         <div style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, overflowY: "auto" }}>{body}</div>
+
+        {profile && !inFlowMode && <BottomNav active={activeTab} onChange={setActiveTab} />}
       </div>
     </div>
   );
