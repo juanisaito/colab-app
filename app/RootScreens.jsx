@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { Screen, Label, TextLink, PrimaryButton, UnderlineField, ProducerPhoto } from "./ui/pieces.jsx";
+import { Screen, Label, TextLink, PrimaryButton, UnderlineField, ProducerPhoto, underlineInputStyle } from "./ui/pieces.jsx";
+import AnimatedPrompt from "./ui/AnimatedPrompt.jsx";
 import { getAllRequests } from "./lib/storage.js";
 import { ESTADO_LABELS, esPropuestaElegida, esActivo, tieneProfesionalElegido } from "./domain/estado.js";
 
@@ -115,50 +116,95 @@ function RootHeader({ title, children }) {
 
 /* ---------------- Inicio ---------------- */
 
+const requestExamples = [
+  "Quiero grabar voces",
+  "Quiero producir una canción desde cero",
+  "Necesito mezclar y masterizar un tema",
+  "Busco un sonidista para tocar en vivo",
+];
+
+function HomeRequestComposer({ compact, text, onTextChange, onSubmit, interpreting, error }) {
+  return (
+    <div style={compact ? { borderTop: `1px solid ${COLORS.border}`, paddingTop: 16 } : undefined}>
+      <Label>{compact ? "¿Querés hacer otro pedido?" : "¿Qué querés hacer?"}</Label>
+      <div style={{ position: "relative" }}>
+        <textarea
+          value={text}
+          onChange={(event) => onTextChange(event.target.value)}
+          rows={compact ? 1 : 2}
+          disabled={interpreting}
+          aria-label="Contanos qué querés hacer"
+          style={{
+            ...underlineInputStyle,
+            position: "relative",
+            zIndex: 2,
+            resize: "none",
+            lineHeight: 1.45,
+            minHeight: compact ? 46 : 62,
+            maxHeight: compact ? 72 : 104,
+            fontSize: compact ? 15.5 : 17,
+          }}
+        />
+        {!text && (
+          <div
+            style={{
+              position: "absolute",
+              inset: "8px 0 auto",
+              pointerEvents: "none",
+              fontFamily: "'IBM Plex Sans', sans-serif",
+              fontSize: compact ? 15.5 : 17,
+              lineHeight: 1.45,
+            }}
+          >
+            <AnimatedPrompt examples={requestExamples} />
+          </div>
+        )}
+        <div style={{ height: 1, background: COLORS.border }} />
+      </div>
+      {error && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, margin: "9px 0 0" }}>{error}</p>}
+      <div style={{ display: "flex", justifyContent: compact ? "flex-end" : "stretch", marginTop: compact ? 10 : 14 }}>
+        <PrimaryButton full={!compact} disabled={text.trim().length < 3 || interpreting} onClick={() => onSubmit(text.trim())}>
+          {interpreting ? "Entendiendo…" : "Continuar"}
+        </PrimaryButton>
+      </div>
+    </div>
+  );
+}
+
 export function HomeScreen({ artistName, onSubmit, interpreting, error, text, onTextChange, onOpenRequest }) {
   const requests = useMyRequests(artistName);
   const active = requests.find((r) => esActivo(r.estado)) || null;
 
   return (
-    <div style={{ padding: "22px 22px 26px", display: "flex", flexDirection: "column", gap: 26 }}>
-      <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 15, color: COLORS.muted, margin: 0 }}>
-        Hola, <span style={{ color: COLORS.text, fontWeight: 700 }}>{artistName}</span>
-      </p>
-
-      <div>
-        <Label>¿Qué querés hacer?</Label>
-        <UnderlineField
-          multiline
-          value={text}
-          onChange={(e) => onTextChange(e.target.value)}
-          placeholder="Escribí con tus palabras…"
-          disabled={interpreting}
-        />
-        {error && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, marginTop: 10 }}>{error}</p>}
-        <div style={{ marginTop: 14 }}>
-          <PrimaryButton full disabled={text.trim().length < 3 || interpreting} onClick={() => onSubmit(text.trim())}>
-            Continuar
-          </PrimaryButton>
-        </div>
-      </div>
-
+    <div style={{ padding: "24px 22px 26px", display: "flex", flexDirection: "column", gap: active ? 20 : 24 }}>
       {active && (
         <div>
           <Label>En movimiento</Label>
           <button
             onClick={() => onOpenRequest(active)}
             className="press"
-            style={{ width: "100%", textAlign: "left", background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 14, cursor: "pointer" }}
+            style={{ width: "100%", textAlign: "left", background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 11, padding: "11px 12px", cursor: "pointer" }}
           >
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 0.5, color: COLORS.accent, textTransform: "uppercase", marginBottom: 6 }}>
-              {ESTADO_LABELS[active.estado]}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 5 }}>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 0.5, color: COLORS.accent, textTransform: "uppercase" }}>
+                {ESTADO_LABELS[active.estado]}
+              </span>
+              <span style={{ color: COLORS.muted, fontSize: 15 }}>›</span>
             </div>
-            <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 14.5, color: COLORS.text, marginBottom: 5 }}>{active.resumen}</div>
-            <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12.5, lineHeight: 1.4, margin: "0 0 10px" }}>{ultimaNovedad(active)}</p>
-            <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.accent, fontSize: 12.5, fontWeight: 700 }}>Ver pedido ›</span>
+            <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 14, color: COLORS.text, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{active.resumen}</div>
+            <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 11.75, lineHeight: 1.35, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ultimaNovedad(active)}</p>
           </button>
         </div>
       )}
+
+      <HomeRequestComposer
+        compact={!!active}
+        text={text}
+        onTextChange={onTextChange}
+        onSubmit={onSubmit}
+        interpreting={interpreting}
+        error={error}
+      />
     </div>
   );
 }

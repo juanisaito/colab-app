@@ -295,7 +295,7 @@ test("confirmar el pago de la seña dos veces no duplica ni altera la reserva (a
     booking: {
       status: "slot_confirmed",
       selectedSlot: { id: "slot-1", label: "lunes 15:00hs", isoDate: "2026-09-08T15:00:00.000Z" },
-      availableSlots: [],
+      availableSlots: [{ id: "slot-1", label: "lunes 15:00hs", isoDate: "2026-09-08T15:00:00.000Z" }],
       requestedAt: "2026-08-30T10:00:00.000Z",
       confirmedAt: "2026-08-30T10:05:00.000Z",
       depositPaidAt: null,

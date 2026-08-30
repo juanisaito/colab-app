@@ -71,6 +71,20 @@ test("formatBalanceDueLabel devuelve una etiqueta legible no vacía", () => {
 
 const PROPUESTA_ELEGIDA = { estado: "propuesta_elegida", ofertas: [] };
 const SLOT = { id: "slot-1", label: "x", isoDate: "2026-09-08T15:00:00.000Z" };
+const REQUESTED_AT = new Date("2026-08-30T10:00:00.000Z");
+
+function createStableBooking() {
+  return createInitialBooking(1000, new Date("2026-09-01T12:00:00.000Z"));
+}
+
+function createRequestedRequest() {
+  const booking = createStableBooking();
+  return applyRequestSlot({ ...PROPUESTA_ELEGIDA, booking }, booking.availableSlots[0], REQUESTED_AT);
+}
+
+function createConfirmedRequest() {
+  return applyConfirmSlot(createRequestedRequest(), new Date("2026-08-30T10:00:02.500Z"));
+}
 
 test("canStartBooking / applyStartBooking: sólo desde propuesta_elegida (o legacy 'cerrado') y sin booking previo", () => {
   assert.equal(canStartBooking({ estado: "propuesta_elegida" }), true);
@@ -85,25 +99,36 @@ test("canStartBooking / applyStartBooking: sólo desde propuesta_elegida (o lega
 });
 
 test("canRequestSlot / applyRequestSlot: sólo con booking pendiente y sin horario ya solicitado", () => {
-  const booking = createInitialBooking(1000);
+  const booking = createStableBooking();
   const conBooking = { ...PROPUESTA_ELEGIDA, booking };
-  assert.equal(canRequestSlot(conBooking), true);
-  assert.equal(canRequestSlot({ ...conBooking, booking: { ...booking, selectedSlot: SLOT } }), false); // ya solicitado
-  assert.equal(canRequestSlot({ ...conBooking, booking: { ...booking, status: "slot_confirmed" } }), false);
-  assert.equal(canRequestSlot({ estado: "reservado", booking }), false);
+  const availableSlot = booking.availableSlots[0];
+  assert.equal(canRequestSlot(conBooking, availableSlot.id), true);
+  assert.equal(canRequestSlot(conBooking, "slot-inventado"), false);
+  assert.equal(canRequestSlot({ ...conBooking, booking: { ...booking, selectedSlot: availableSlot } }, availableSlot.id), false); // ya solicitado
+  assert.equal(canRequestSlot({ ...conBooking, booking: { ...booking, status: "slot_confirmed" } }, availableSlot.id), false);
+  assert.equal(canRequestSlot({ estado: "reservado", booking }, availableSlot.id), false);
   assert.equal(applyRequestSlot({ estado: "cancelado", booking }, SLOT), null);
-  const requested = applyRequestSlot(conBooking, SLOT);
-  assert.equal(requested.booking.selectedSlot, SLOT);
+  assert.equal(applyRequestSlot(conBooking, { id: "slot-inventado", label: "falso", isoDate: SLOT.isoDate }), null);
+  const requested = applyRequestSlot(conBooking, { ...availableSlot, label: "texto manipulado" }, REQUESTED_AT);
+  assert.deepEqual(requested.booking.selectedSlot, availableSlot, "debe persistir el slot canónico, no el objeto recibido desde la UI");
   assert.ok(requested.booking.requestedAt);
-  assert.equal(requested.booking.balanceDueAt, calculateBalanceDueAt(SLOT.isoDate));
+  assert.equal(requested.booking.balanceDueAt, calculateBalanceDueAt(availableSlot.isoDate));
 });
 
 test("canConfirmSlot / applyConfirmSlot: sólo con horario solicitado y sin confirmar todavía", () => {
-  const booking = { ...createInitialBooking(1000), selectedSlot: SLOT, requestedAt: new Date().toISOString() };
-  const conHorario = { ...PROPUESTA_ELEGIDA, booking };
+  const conHorario = createRequestedRequest();
+  const { booking } = conHorario;
   assert.equal(canConfirmSlot(conHorario), true);
   assert.equal(canConfirmSlot({ ...conHorario, booking: { ...booking, confirmedAt: new Date().toISOString() } }), false); // ya confirmado
   assert.equal(canConfirmSlot({ ...conHorario, booking: { ...booking, selectedSlot: null } }), false); // sin horario
+  assert.equal(canConfirmSlot({
+    ...conHorario,
+    booking: {
+      ...booking,
+      selectedSlot: { ...booking.selectedSlot, isoDate: "2099-01-01T10:00:00.000Z" },
+      balanceDueAt: calculateBalanceDueAt("2099-01-01T10:00:00.000Z"),
+    },
+  }), false); // el horario elegido debe coincidir con el slot canónico disponible
   assert.equal(canConfirmSlot({ estado: "cancelado", booking }), false);
   const confirmed = applyConfirmSlot(conHorario);
   assert.equal(confirmed.booking.status, BOOKING_STATUS.SLOT_CONFIRMED);
@@ -114,11 +139,14 @@ test("canConfirmSlot / applyConfirmSlot: sólo con horario solicitado y sin conf
 });
 
 test("canPayDeposit / applyPayDeposit: sólo con el horario ya confirmado", () => {
-  const bookingConfirmado = { ...createInitialBooking(1000), selectedSlot: SLOT, status: BOOKING_STATUS.SLOT_CONFIRMED };
-  const listo = { ...PROPUESTA_ELEGIDA, booking: bookingConfirmado };
+  const listo = createConfirmedRequest();
+  const bookingConfirmado = listo.booking;
   assert.equal(canPayDeposit(listo), true);
   assert.equal(canPayDeposit({ ...listo, booking: { ...bookingConfirmado, status: "pending_confirmation" } }), false);
   assert.equal(canPayDeposit({ estado: "cancelado", booking: bookingConfirmado }), false);
+  assert.equal(canPayDeposit({ ...listo, booking: { ...bookingConfirmado, confirmedAt: null } }), false);
+  assert.equal(canPayDeposit({ ...listo, booking: { ...bookingConfirmado, selectedSlot: null } }), false);
+  assert.equal(canPayDeposit({ ...listo, booking: { ...bookingConfirmado, balanceAmount: 999 } }), false);
   const paid = applyPayDeposit(listo);
   assert.equal(paid.estado, "reservado");
   assert.equal(paid.booking.status, BOOKING_STATUS.DEPOSIT_PAID);
@@ -127,18 +155,14 @@ test("canPayDeposit / applyPayDeposit: sólo con el horario ya confirmado", () =
 /* ---------------- recuperación del timer de confirmación tras una recarga ---------------- */
 
 test("getRemainingConfirmationDelay: reabrir un pedido pendiente antes de vencer devuelve el tiempo restante real", () => {
-  const requestedAt = new Date("2026-08-30T10:00:00.000Z");
-  const now = new Date(requestedAt.getTime() + 1000); // pasó 1s de los 2.5s originales
-  const booking = { ...createInitialBooking(1000), selectedSlot: SLOT, requestedAt: requestedAt.toISOString() };
-  const request = { ...PROPUESTA_ELEGIDA, booking };
+  const now = new Date(REQUESTED_AT.getTime() + 1000); // pasó 1s de los 2.5s originales
+  const request = createRequestedRequest();
   assert.equal(getRemainingConfirmationDelay(request, now), SLOT_CONFIRMATION_DELAY_MS - 1000);
 });
 
 test("getRemainingConfirmationDelay: reabrir un pedido pendiente después de vencido el plazo confirma de inmediato (0ms)", () => {
-  const requestedAt = new Date("2026-08-30T10:00:00.000Z");
-  const now = new Date(requestedAt.getTime() + 10000); // pasaron 10s, mucho más que 2.5s
-  const booking = { ...createInitialBooking(1000), selectedSlot: SLOT, requestedAt: requestedAt.toISOString() };
-  const request = { ...PROPUESTA_ELEGIDA, booking };
+  const now = new Date(REQUESTED_AT.getTime() + 10000); // pasaron 10s, mucho más que 2.5s
+  const request = createRequestedRequest();
   assert.equal(getRemainingConfirmationDelay(request, now), 0);
   // Y esa confirmación "inmediata" sigue siendo una transición válida.
   assert.equal(canConfirmSlot(request), true);
@@ -169,15 +193,17 @@ test("getBookingPhase: un booking desconocido o inconsistente nunca aparece como
 });
 
 test("getBookingPhase: la única fase 'confirmed' es deposit_paid + estado reservado + horario presente", () => {
-  const booking = { ...createInitialBooking(1000), selectedSlot: SLOT, status: BOOKING_STATUS.DEPOSIT_PAID };
-  assert.equal(getBookingPhase({ estado: "reservado", booking }), "confirmed");
+  const paid = applyPayDeposit(createConfirmedRequest(), new Date("2026-08-30T10:00:03.000Z"));
+  assert.equal(getBookingPhase(paid), "confirmed");
+  assert.equal(getBookingPhase({ ...paid, booking: { ...paid.booking, depositPaidAt: null } }), "inconsistent");
 });
 
 test("getBookingPhase: fases normales del recorrido", () => {
   assert.equal(getBookingPhase({ estado: "propuesta_elegida", booking: null }), "not_started");
-  assert.equal(getBookingPhase({ estado: "propuesta_elegida", booking: createInitialBooking(1000) }), "choose_slot");
-  const conHorario = { ...createInitialBooking(1000), selectedSlot: SLOT };
-  assert.equal(getBookingPhase({ estado: "propuesta_elegida", booking: conHorario }), "awaiting_confirmation");
-  const confirmado = { ...conHorario, status: BOOKING_STATUS.SLOT_CONFIRMED };
-  assert.equal(getBookingPhase({ estado: "propuesta_elegida", booking: confirmado }), "slot_confirmed");
+  const initial = { ...PROPUESTA_ELEGIDA, booking: createStableBooking() };
+  assert.equal(getBookingPhase(initial), "choose_slot");
+  const conHorario = createRequestedRequest();
+  assert.equal(getBookingPhase(conHorario), "awaiting_confirmation");
+  const confirmado = createConfirmedRequest();
+  assert.equal(getBookingPhase(confirmado), "slot_confirmed");
 });

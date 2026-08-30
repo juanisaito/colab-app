@@ -27,7 +27,7 @@ import {
   applyPayDeposit,
 } from "./domain/booking.js";
 import BookingFlow from "./features/booking/BookingFlow.jsx";
-import { createInitialBooking } from "./domain/booking.js";
+import AnimatedPrompt from "./ui/AnimatedPrompt.jsx";
 
 /* ============================================================
    COLAB — prototipo navegable del flujo del artista
@@ -184,7 +184,7 @@ function Gate({ onDone }) {
         />
         {!name && (
           <div style={{ position: "absolute", inset: "8px 0 auto", pointerEvents: "none", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 17 }}>
-            <AnimatedExamples examples={artistExamples} />
+            <AnimatedPrompt examples={artistExamples} />
           </div>
         )}
         <div style={{ height: 1, background: nameFocused ? COLORS.accent : COLORS.border, transition: "background .15s ease" }} />
@@ -201,42 +201,6 @@ function Gate({ onDone }) {
 
 /* ---------------- pantalla: inicio + búsqueda por IA ---------------- */
 
-export function AnimatedExamples({ examples }) {
-  const [displayed, setDisplayed] = useState("");
-  const [index, setIndex] = useState(0);
-  const [phase, setPhase] = useState("typing");
-
-  useEffect(() => {
-    const current = examples[index];
-    let t;
-    if (phase === "typing") {
-      if (displayed.length < current.length) {
-        t = setTimeout(() => setDisplayed(current.slice(0, displayed.length + 1)), 42);
-      } else {
-        t = setTimeout(() => setPhase("pausing"), 1300);
-      }
-    } else if (phase === "pausing") {
-      t = setTimeout(() => setPhase("deleting"), 700);
-    } else {
-      if (displayed.length > 0) {
-        t = setTimeout(() => setDisplayed(displayed.slice(0, -1)), 22);
-      } else {
-        setIndex((i) => (i + 1) % examples.length);
-        setPhase("typing");
-      }
-    }
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayed, phase, index]);
-
-  return (
-    <span style={{ color: COLORS.muted }}>
-      {displayed}
-      <span className="blink-caret">|</span>
-    </span>
-  );
-}
-
 function StartScreen({ onSubmit, interpreting, error, initialText, onExit, exitLabel, confirmExitBeforeDiscard }) {
   const [text, setText] = useState(initialText || "");
   const [focused, setFocused] = useState(false);
@@ -244,9 +208,6 @@ function StartScreen({ onSubmit, interpreting, error, initialText, onExit, exitL
   // Punto 6: solo los 4 casos principales entre los ejemplos. Tuner/sonidista/
   // camps funcionan si se escriben, pero no aparecen acá.
   const examples = ["Quiero grabar una canción", "Quiero hacer una canción", "Quiero terminar un tema", "Quiero mezclar mi canción"];
-
-  const showAnimated = text.length === 0 && !focused;
-  const showStaticHint = text.length === 0 && focused;
 
   function handleExitClick() {
     if (confirmExitBeforeDiscard) setConfirmingExit(true);
@@ -287,17 +248,14 @@ function StartScreen({ onSubmit, interpreting, error, initialText, onExit, exitL
           }}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
+          aria-label="Contanos qué querés hacer"
           rows={2}
           disabled={interpreting}
           style={{ ...underlineInputStyle, position: "relative", zIndex: 2, resize: "none", lineHeight: 1.45, height: 64, minHeight: 64, maxHeight: 104, overflowY: "auto" }}
         />
         {text.length === 0 && (
           <div style={{ position: "absolute", top: 0, left: 0, right: 0, padding: "8px 0", pointerEvents: "none", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 17, lineHeight: 1.5 }}>
-            {showStaticHint ? (
-              <span style={{ color: COLORS.muted }}>Escribí con tus palabras…</span>
-            ) : (
-              showAnimated && <AnimatedExamples examples={examples} />
-            )}
+            <AnimatedPrompt examples={examples} />
           </div>
         )}
         <div style={{ height: 1, background: focused ? COLORS.accent : COLORS.border, transition: "background .15s ease" }} />
@@ -1636,13 +1594,16 @@ export default function App() {
     }
     const delayMs = getRemainingConfirmationDelay(mine);
     const t = setTimeout(async () => {
-      scheduledSlotConfirmations.current.delete(reqId);
       // Se vuelve a validar el estado real antes de escribir: entre
       // programar este timer y que corra, el booking podría haber avanzado
       // o el pedido podría ya no aceptar esta transición — applyConfirmSlot
       // exige exactamente propuesta_elegida (o su legacy) + booking pendiente
       // + horario solicitado + sin confirmar todavía.
-      await updateRequestById(reqId, (r) => applyConfirmSlot(r));
+      try {
+        await updateRequestById(reqId, (r) => applyConfirmSlot(r));
+      } finally {
+        scheduledSlotConfirmations.current.delete(reqId);
+      }
     }, delayMs);
     timers.current.push(t);
   }
@@ -1663,11 +1624,10 @@ export default function App() {
     setChooseError(null);
     let conversation = null;
     const { changed, ok } = await updateRequestById(request.id, (r) => {
-      // A diferencia de elegir una propuesta o generar una oferta nueva,
-      // mandar un mensaje sigue permitido con "propuesta_elegida" — todavía
-      // no hay contratación confirmada, así que el límite de 4 mensajes
-      // sigue rigiendo en vez de bloquear el chat directamente.
-      if (esCancelado(r.estado)) return null;
+      // Revalidar desde el pedido recién leído evita abrir o reactivar chats
+      // que ya quedaron en modo lectura por cancelación o por una reserva con
+      // otro profesional.
+      if (!puedeEscribirEnConversacion(r, offer.productor)) return null;
       const existing = r.intereses.find((it) => it.productor === offer.productor);
       if (existing) {
         conversation = { ...existing, formalOfferExists: true };
@@ -1958,9 +1918,8 @@ export default function App() {
         `}</style>
 
         {profile !== undefined && (
-          <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: `1px solid ${COLORS.border}` }}>
+          <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", padding: "12px 18px", borderBottom: `1px solid ${COLORS.border}` }}>
             <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 2, color: COLORS.accent }}>COLAB</span>
-            {profile && <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12, color: COLORS.muted }}>{profile.name}</span>}
           </div>
         )}
 

@@ -5,7 +5,7 @@ import { ARTIST_GENRE_HINTS } from "./genres.js";
    frontend (la llamada no usa ni expone ninguna API key) + error visible
    y recuperable (ver usedFallback más abajo, mostrado en el resumen). */
 
-const CLASSIFIER_SYSTEM_PROMPT = `Sos el módulo de interpretación de pedidos de COLAB, una app que conecta artistas independientes con productores musicales. Vas a recibir el texto libre de un artista. Tu trabajo es inferir lo más posible y señalar solo lo que realmente falte — nunca convertir esto en un formulario, y nunca inventar un dato que el texto no sostiene.
+export const CLASSIFIER_SYSTEM_PROMPT = `Sos el módulo de interpretación de pedidos de COLAB, una app que conecta artistas independientes con productores musicales. Vas a recibir el texto libre de un artista. Tu trabajo es inferir lo más posible y señalar solo lo que realmente falte — nunca convertir esto en un formulario, y nunca inventar un dato que el texto no sostiene.
 
 El texto puede venir escrito rápido, con faltas, fonética o lunfardo (por ejemplo "haser", "cansion", "gravar"). Interpretá la intención por contexto y no corrijas ni juzgues cómo escribe el artista.
 
@@ -148,54 +148,40 @@ export function interpretFallback(text) {
   });
 }
 
-async function interpretRequestViaClaudeAPI(text) {
+export async function interpretRequestViaBackend(text, options = {}) {
+  const fetchImpl = options.fetchImpl || fetch;
+  const configuredEndpoint = typeof import.meta !== "undefined" ? import.meta.env?.VITE_AI_INTERPRET_URL : null;
+  const endpoint = options.endpoint || configuredEndpoint || "/api/interpret";
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 6000);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 8000);
   let response;
   try {
-    response = await fetch("https://api.anthropic.com/v1/messages", {
+    response = await fetchImpl(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
       signal: controller.signal,
-      // Sin API key en el frontend: el runtime de artifacts la maneja del otro lado.
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 600,
-        system: CLASSIFIER_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: text }],
-      }),
+      body: JSON.stringify({ text }),
     });
   } finally {
     clearTimeout(timeout);
   }
-  if (!response.ok) throw new Error(`API de interpretación: ${response.status}`);
+  if (!response.ok) throw new Error(`Backend de interpretación: ${response.status}`);
   const data = await response.json();
-  const raw = (data.content || [])
-    .map((b) => (b.type === "text" ? b.text : ""))
-    .filter(Boolean)
-    .join("")
-    .trim();
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("Respuesta sin JSON");
-  const parsed = JSON.parse(match[0]);
-  if (!validateClassification(parsed)) throw new Error("Clasificación inválida");
-  return normalizeClassification(parsed);
+  const classification = data.classification || data;
+  if (!validateClassification(classification)) throw new Error("Clasificación inválida");
+  return normalizeClassification(classification);
 }
 
 // Adaptador reemplazable: interpretRequest es el único punto de entrada que
 // usa el resto de la app. Devuelve además si tuvo que usar el respaldo local,
 // para poder avisarlo (error visible y recuperable, no oculto).
 export async function interpretRequest(text) {
-  // El visualizador local no tiene el proxy autenticado de Claude Artifacts.
-  // Usamos el respaldo inmediatamente para que la interacción sea instantánea.
-  if (typeof window !== "undefined" && !window.storage) {
-    return { ...interpretFallback(text), originalText: text, usedFallback: true };
-  }
   try {
-    const result = await interpretRequestViaClaudeAPI(text);
+    const result = await interpretRequestViaBackend(text);
     return { ...result, originalText: text, usedFallback: false };
   } catch (e) {
-    console.warn("Interpretación por API falló, uso respaldo determinístico:", e);
+    console.warn("Interpretación por IA no disponible, uso respaldo determinístico:", e);
     return { ...interpretFallback(text), originalText: text, usedFallback: true };
   }
 }

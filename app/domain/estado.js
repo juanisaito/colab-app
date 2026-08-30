@@ -56,7 +56,7 @@ export function puedeRecibirActividadDeProductores(estado) {
 // reservado) todavía no está definida — requiere modelar devoluciones. Hasta
 // entonces, cancelar sólo está disponible antes de elegir una propuesta.
 export function puedeCancelarse(estado) {
-  return !tieneProfesionalElegido(estado) && !esCancelado(estado);
+  return estado === "esperando" || estado === "con_ofertas";
 }
 
 // Sólo puede seguir escribiendo en la conversación con `productorName` si:
@@ -69,12 +69,15 @@ export function puedeCancelarse(estado) {
 // estado) porque necesita mirar chosenOfferId/ofertas para saber quién es
 // "el profesional elegido".
 export function puedeEscribirEnConversacion(request, productorName) {
+  if (!request) return false;
   if (esCancelado(request.estado)) return false;
   if (request.estado === "reservado") {
     const chosen = (request.ofertas || []).find((o) => o.id === request.chosenOfferId);
     return !!chosen && chosen.productor === productorName;
   }
-  return true;
+  return request.estado === "esperando"
+    || request.estado === "con_ofertas"
+    || esPropuestaElegida(request.estado);
 }
 
 // El límite de 4 mensajes por persona rige siempre, salvo la única

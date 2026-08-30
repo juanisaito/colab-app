@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { esPropuestaElegida, esCancelado, esActivo, tieneProfesionalElegido, puedeRecibirActividadDeProductores } from "./estado.js";
+import {
+  esPropuestaElegida, esCancelado, esActivo, tieneProfesionalElegido,
+  puedeRecibirActividadDeProductores, puedeCancelarse,
+  puedeEscribirEnConversacion,
+} from "./estado.js";
 
 test("esPropuestaElegida trata el estado legacy 'cerrado' igual que 'propuesta_elegida'", () => {
   assert.equal(esPropuestaElegida("propuesta_elegida"), true);
@@ -42,4 +46,19 @@ test("puedeRecibirActividadDeProductores sólo es true para 'esperando' y 'con_o
   assert.equal(puedeRecibirActividadDeProductores("reservado"), false);
   assert.equal(puedeRecibirActividadDeProductores("cerrado"), false);
   assert.equal(puedeRecibirActividadDeProductores("cancelado"), false);
+});
+
+test("puedeCancelarse usa una lista permitida y rechaza estados desconocidos", () => {
+  assert.equal(puedeCancelarse("esperando"), true);
+  assert.equal(puedeCancelarse("con_ofertas"), true);
+  for (const status of ["propuesta_elegida", "cerrado", "reservado", "cancelado", "desconocido", undefined]) {
+    assert.equal(puedeCancelarse(status), false);
+  }
+});
+
+test("puedeEscribirEnConversacion rechaza pedidos ausentes o con estados desconocidos", () => {
+  assert.equal(puedeEscribirEnConversacion(null, "A"), false);
+  assert.equal(puedeEscribirEnConversacion({ estado: "desconocido", ofertas: [] }, "A"), false);
+  assert.equal(puedeEscribirEnConversacion({ estado: "esperando", ofertas: [] }, "A"), true);
+  assert.equal(puedeEscribirEnConversacion({ estado: "propuesta_elegida", ofertas: [] }, "A"), true);
 });

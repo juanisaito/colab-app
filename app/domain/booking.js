@@ -18,6 +18,36 @@ export const SLOT_CONFIRMATION_DELAY_MS = 2500;
 const DEPOSIT_RATE = 0.25;
 const BALANCE_DUE_OFFSET_MS = 24 * 60 * 60 * 1000;
 
+function isValidDateValue(value) {
+  return typeof value === "string" && Number.isFinite(new Date(value).getTime());
+}
+
+function hasConsistentAmounts(booking) {
+  if (!booking) return false;
+  const amounts = [booking.totalAmount, booking.depositAmount, booking.balanceAmount];
+  return amounts.every((amount) => Number.isFinite(amount) && amount >= 0)
+    && booking.depositAmount + booking.balanceAmount === booking.totalAmount;
+}
+
+function findCanonicalSlot(booking, slotId) {
+  if (!slotId || !Array.isArray(booking?.availableSlots)) return null;
+  return booking.availableSlots.find((slot) => slot.id === slotId && isValidDateValue(slot.isoDate)) || null;
+}
+
+function hasValidSelectedSlot(booking) {
+  if (!booking?.selectedSlot) return false;
+  const canonicalSlot = findCanonicalSlot(booking, booking.selectedSlot.id);
+  return !!canonicalSlot
+    && canonicalSlot.isoDate === booking.selectedSlot.isoDate
+    && isValidDateValue(booking.selectedSlot.isoDate);
+}
+
+function hasValidScheduleDetails(booking) {
+  if (!hasValidSelectedSlot(booking)) return false;
+  if (!isValidDateValue(booking.requestedAt) || !isValidDateValue(booking.balanceDueAt)) return false;
+  return calculateBalanceDueAt(booking.selectedSlot.isoDate) === booking.balanceDueAt;
+}
+
 // La seña es el 25% del precio final; el saldo es el resto (no el 75%
 // calculado por separado), para que ambas partes sumen siempre exactamente
 // el total sin arrastre de redondeo.
@@ -101,23 +131,26 @@ export function applyStartBooking(request, totalAmount, referenceDate = new Date
   return { ...request, booking: createInitialBooking(totalAmount, referenceDate) };
 }
 
-export function canRequestSlot(request) {
+export function canRequestSlot(request, slotId) {
   return !!request
     && esPropuestaElegida(request.estado)
     && !!request.booking
     && request.booking.status === BOOKING_STATUS.PENDING_CONFIRMATION
-    && !request.booking.selectedSlot;
+    && !request.booking.selectedSlot
+    && hasConsistentAmounts(request.booking)
+    && !!findCanonicalSlot(request.booking, slotId);
 }
 
 export function applyRequestSlot(request, slot, now = new Date()) {
-  if (!canRequestSlot(request)) return null;
+  const canonicalSlot = findCanonicalSlot(request?.booking, slot?.id);
+  if (!canonicalSlot || !canRequestSlot(request, canonicalSlot.id)) return null;
   return {
     ...request,
     booking: {
       ...request.booking,
-      selectedSlot: slot,
+      selectedSlot: canonicalSlot,
       requestedAt: now.toISOString(),
-      balanceDueAt: calculateBalanceDueAt(slot.isoDate),
+      balanceDueAt: calculateBalanceDueAt(canonicalSlot.isoDate),
     },
   };
 }
@@ -127,7 +160,8 @@ export function canConfirmSlot(request) {
     && esPropuestaElegida(request.estado)
     && !!request.booking
     && request.booking.status === BOOKING_STATUS.PENDING_CONFIRMATION
-    && !!request.booking.selectedSlot
+    && hasConsistentAmounts(request.booking)
+    && hasValidScheduleDetails(request.booking)
     && !request.booking.confirmedAt;
 }
 
@@ -152,7 +186,11 @@ export function canPayDeposit(request) {
   return !!request
     && esPropuestaElegida(request.estado)
     && !!request.booking
-    && request.booking.status === BOOKING_STATUS.SLOT_CONFIRMED;
+    && request.booking.status === BOOKING_STATUS.SLOT_CONFIRMED
+    && hasConsistentAmounts(request.booking)
+    && hasValidScheduleDetails(request.booking)
+    && isValidDateValue(request.booking.confirmedAt)
+    && !request.booking.depositPaidAt;
 }
 
 export function applyPayDeposit(request, now = new Date()) {
@@ -178,16 +216,30 @@ export function getBookingPhase(request) {
     return esPropuestaElegida(estado) ? "not_started" : "inconsistent";
   }
   if (!esPropuestaElegida(estado) && estado !== "reservado") return "inconsistent";
+  if (!hasConsistentAmounts(booking)) return "inconsistent";
 
   switch (booking.status) {
     case BOOKING_STATUS.PENDING_CONFIRMATION:
       if (estado === "reservado") return "inconsistent";
-      return booking.selectedSlot ? "awaiting_confirmation" : "choose_slot";
+      if (!booking.selectedSlot) {
+        return Array.isArray(booking.availableSlots) && booking.availableSlots.length > 0
+          ? "choose_slot"
+          : "inconsistent";
+      }
+      return canConfirmSlot(request) ? "awaiting_confirmation" : "inconsistent";
     case BOOKING_STATUS.SLOT_CONFIRMED:
-      if (estado === "reservado" || !booking.selectedSlot) return "inconsistent";
-      return "slot_confirmed";
+      return estado !== "reservado"
+        && hasValidScheduleDetails(booking)
+        && isValidDateValue(booking.confirmedAt)
+        ? "slot_confirmed"
+        : "inconsistent";
     case BOOKING_STATUS.DEPOSIT_PAID:
-      return estado === "reservado" && !!booking.selectedSlot ? "confirmed" : "inconsistent";
+      return estado === "reservado"
+        && hasValidScheduleDetails(booking)
+        && isValidDateValue(booking.confirmedAt)
+        && isValidDateValue(booking.depositPaidAt)
+        ? "confirmed"
+        : "inconsistent";
     default:
       return "inconsistent";
   }
