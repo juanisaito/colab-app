@@ -15,7 +15,17 @@ Antes de seguir agregando funcionalidades, se hizo una refactorización purament
 
 **Sin cambios de comportamiento.** Verificado con Playwright en cada uno de los tres commits: acceso, creación y publicación, edición, cancelación, conversación con el límite real de 4 mensajes (confirmado también a nivel de storage), generación de oferta, elección de propuesta, navegación Inicio/Pedidos/Mensajes/Perfil, y datos guardados con estado legacy `"cerrado"` (incluida la migración). `pnpm build` y `pnpm test` sin errores en los tres commits.
 
-**Encontrado pero no corregido** (no era el objetivo de esta tarea): `isRequestStillOpen` (en `ColabApp.jsx`) sólo trata como "cerrado" los estados `"cerrado"` y `"cancelado"` — no `"propuesta_elegida"` directamente. Es una asimetría real frente a `esPropuestaElegida`, pero hoy es inofensiva porque tanto `handleChoose` como `handleCancel` cancelan explícitamente todos los timers de simulación de productores apenas se elige una propuesta o se cancela, así que ese código nunca llega a ejecutarse con un pedido en `"propuesta_elegida"`. Se conservó tal cual para no cambiar comportamiento; vale la pena revisarla si en el futuro se reintroduce lógica que dependa de `isRequestStillOpen` sin pasar por esos mismos flujos.
+**Corregido en un commit posterior** (ver más abajo, "Fix: impedir actualizaciones tardías y cubrir almacenamiento"): la asimetría de `isRequestStillOpen` que se documentaba acá quedó resuelta.
+
+## Fix: impedir actualizaciones tardías y cubrir almacenamiento (30 de agosto de 2026)
+
+`isRequestStillOpen` (en `ColabApp.jsx`) comparaba el estado directamente contra `"cerrado"` en vez de usar `esPropuestaElegida`, así que un pedido con `propuesta_elegida` seguía considerándose abierto para nuevas simulaciones de productores. Ahora usa `esPropuestaElegida` + `esCancelado`, igual que el resto del código: un pedido deja de aceptar nuevas simulaciones apenas tiene `propuesta_elegida`, el estado legacy `"cerrado"` (vía `esPropuestaElegida`), o `cancelado`.
+
+Esa comprobación sola no alcanzaba: entre `isRequestStillOpen` y el `updateRequestById` de cada timer de `scheduleSimulatedProducers`, el artista puede elegir una propuesta o cancelar el pedido mientras el timer ya está en vuelo. Los tres updaters tardíos de esa función (oferta directa, interés nuevo y recuperación) ahora repiten el mismo guard (`esPropuestaElegida || esCancelado` → `null`, sin guardar) usando el estado real que lee `updateRequestById` en ese instante, no el que vio `isRequestStillOpen` antes. En particular, una oferta directa tardía ya no puede convertir `"propuesta_elegida"` en `"con_ofertas"`. Cancelar los timers pendientes en `handleChoose`/`handleCancel` se mantiene, pero deja de ser la única protección.
+
+Se agregaron pruebas de almacenamiento en `app/lib/storage.test.js` (stub de `localStorage` en memoria, sin dependencias nuevas): lectura/escritura básica de `getAllRequests`/`getRequestById`/`updateRequestById`, id inexistente, updater que devuelve `null` o la misma referencia, actualizaciones consecutivas, migración de `"cerrado"`, un fallo de escritura, y dos pruebas que reproducen la carrera real (elegir propuesta y cancelar antes de que "llegue" un callback de productor tardío). `pnpm test` corre ahora 33 pruebas (19 de dominio + 14 de almacenamiento).
+
+Sin cambios de copy, matching, precios, interpretación, estados ni navegación. Verificado con Playwright: publicar, elegir una propuesta, esperar más que el tiempo máximo de los timers y confirmar que no llega ninguna oferta/interés tardío; publicar y cancelar otro pedido y confirmar lo mismo. Sin errores de consola.
 
 ## Corrección de inconsistencias de la navegación (misma sesión, más tarde)
 

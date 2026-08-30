@@ -1340,7 +1340,7 @@ export default function App() {
 
   async function isRequestStillOpen(reqId) {
     const mine = await getRequestById(reqId);
-    return mine && mine.estado !== "cerrado" && !esCancelado(mine.estado);
+    return mine && !esPropuestaElegida(mine.estado) && !esCancelado(mine.estado);
   }
 
   // Compartido entre publicar (pedido nuevo) y actualizar (pedido ya publicado
@@ -1484,7 +1484,16 @@ export default function App() {
         if (path === "ahora_no") return;
         if (path === "oferta_directa") {
           const oferta = buildOfferFrom(p);
-          await updateRequestById(req.id, (r) => ({ ...r, ofertas: [...r.ofertas, oferta], estado: "con_ofertas" }));
+          // isRequestStillOpen ya se comprobó arriba, pero entre esa lectura y
+          // este updateRequestById el artista puede haber elegido una
+          // propuesta o cancelado el pedido — repetimos el guard adentro del
+          // updater para que esa escritura tardía nunca pise el estado real
+          // (en particular, que una oferta directa tardía nunca convierta
+          // "propuesta_elegida" en "con_ofertas").
+          await updateRequestById(req.id, (r) => {
+            if (esPropuestaElegida(r.estado) || esCancelado(r.estado)) return null;
+            return { ...r, ofertas: [...r.ofertas, oferta], estado: "con_ofertas" };
+          });
         } else {
           const createdAt = new Date().toISOString();
           const interes = {
@@ -1494,7 +1503,10 @@ export default function App() {
             resuelto: false,
             createdAt,
           };
-          await updateRequestById(req.id, (r) => ({ ...r, intereses: [...r.intereses, interes] }));
+          await updateRequestById(req.id, (r) => {
+            if (esPropuestaElegida(r.estado) || esCancelado(r.estado)) return null;
+            return { ...r, intereses: [...r.intereses, interes] };
+          });
         }
       }, 3000 + i * 4000);
       timers.current.push(t);
@@ -1507,7 +1519,13 @@ export default function App() {
       if (!mine || mine.intereses.length > 0 || mine.ofertas.length > 0) return;
       const curados = mine.tieneReferencia ? getCuratedAlternatives(mine) : [];
       const recoveryTipo = mine.tieneReferencia && curados.length > 0 ? "curada" : "aclaracion";
-      await updateRequestById(req.id, (r) => ({ ...r, recovery: recoveryTipo, curados }));
+      // Mismo motivo que arriba: repetimos el guard adentro del updater para
+      // que una recuperación tardía no se aplique sobre un pedido que ya
+      // tiene propuesta elegida o fue cancelado entre la lectura y la escritura.
+      await updateRequestById(req.id, (r) => {
+        if (esPropuestaElegida(r.estado) || esCancelado(r.estado)) return null;
+        return { ...r, recovery: recoveryTipo, curados };
+      });
     }, recoveryDelay);
     timers.current.push(rt);
   }
