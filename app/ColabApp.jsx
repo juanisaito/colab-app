@@ -4,19 +4,30 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { COLORS } from "./theme.js";
 import BottomNav from "./BottomNav.jsx";
 import { HomeScreen, OrdersScreen, MessagesScreen, ProfileScreen, HelpScreen, PrivacyScreen, EditNameScreen } from "./RootScreens.jsx";
-import { PrimaryButton, SecondaryButton, TextLink, Label, UnderlineField, underlineInputStyle, Screen, ProducerPhoto } from "./ui/pieces.jsx";
+import { PrimaryButton, SecondaryButton, TextLink, Label, UnderlineField, underlineInputStyle, Screen, ProducerPhoto, BigOption } from "./ui/pieces.jsx";
 import { uid } from "./lib/id.js";
+import { formatMoney } from "./lib/format.js";
 import {
   PROFILE_KEY, storageGet, storageSet,
   getAllRequests, getRequestById, updateRequestById, saveRequests,
   migrateLegacyClosedRequests,
 } from "./lib/storage.js";
-import { esPropuestaElegida, esCancelado } from "./domain/estado.js";
+import {
+  esCancelado, tieneProfesionalElegido, puedeRecibirActividadDeProductores,
+  puedeCancelarse, puedeEscribirEnConversacion, tieneLimiteDeMensajes,
+} from "./domain/estado.js";
 import { GENRE_LABELS, detectGeneros } from "./domain/genres.js";
 import { interpretRequest } from "./domain/interpretation.js";
 import { calculateArtistFinalPrice } from "./domain/pricing.js";
 import { pickProducers, getCuratedAlternatives, pickProducerPath, buildOfferFrom, findProducerByName } from "./domain/matching.js";
 import { sanitizeContextForClassification } from "./domain/contextSanitize.js";
+import {
+  applyStartBooking, applyRequestSlot,
+  canConfirmSlot, applyConfirmSlot, getRemainingConfirmationDelay,
+  applyPayDeposit,
+} from "./domain/booking.js";
+import BookingFlow from "./features/booking/BookingFlow.jsx";
+import { createInitialBooking } from "./domain/booking.js";
 
 /* ============================================================
    COLAB — prototipo navegable del flujo del artista
@@ -29,42 +40,7 @@ import { sanitizeContextForClassification } from "./domain/contextSanitize.js";
 // Punto 8: contador configurable de mensajes previos a la oferta.
 const MAX_PRE_OFFER_MESSAGES_PER_PERSON = 4;
 
-export function formatMoney(n) {
-  return "$" + (Number(n) || 0).toLocaleString("es-AR");
-}
-
 /* ---------------- piezas visuales propias de este flujo ---------------- */
-
-function lowerFirstLabel(label) {
-  if (typeof label !== "string" || !label) return label;
-  return label.toLocaleLowerCase("es-AR");
-}
-
-function BigOption({ label, selected, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className="press"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        width: "100%",
-        textAlign: "left",
-        background: "none",
-        border: "none",
-        borderBottom: `1px solid ${COLORS.border}`,
-        padding: "14px 2px",
-        cursor: "pointer",
-      }}
-    >
-      <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: selected ? 700 : 500, fontSize: 16.5, color: selected ? COLORS.text : COLORS.muted }}>
-        {lowerFirstLabel(label)}
-      </span>
-      {selected && <span style={{ width: 7, height: 7, borderRadius: "50%", background: COLORS.accent, flexShrink: 0 }} />}
-    </button>
-  );
-}
 
 function AttachRow({ label, attached, busy, onToggle }) {
   return (
@@ -732,7 +708,7 @@ const CANNED_PRODUCER_REPLIES = [
   "Perfecto, con eso ya entiendo mejor por dónde encararlo.",
 ];
 
-function ConversationScreen({ request, interes, onBack, onOfferGenerated, formalOfferExists = false, returnLabel, readOnly = false }) {
+function ConversationScreen({ request, interes, onBack, onOfferGenerated, formalOfferExists = false, returnLabel, readOnly = false, readOnlyMessage, unlimited = false }) {
   const initialMessages = interes.mensajes?.length
     ? interes.mensajes
     : [{ from: "productor", text: interes.pregunta, createdAt: interes.createdAt || new Date().toISOString() }];
@@ -747,7 +723,10 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
 
   const misMensajes = mensajes.filter((m) => m.from === "artista").length;
   const mensajesProductor = mensajes.filter((m) => m.from === "productor").length;
-  const atLimit = misMensajes >= MAX_PRE_OFFER_MESSAGES_PER_PERSON;
+  // Tras pagar la seña, el chat con el profesional elegido queda sin límite
+  // de mensajes (unlimited=true) — el resto de los profesionales quedan como
+  // historial de sólo lectura (readOnly), no por límite de mensajes.
+  const atLimit = !unlimited && misMensajes >= MAX_PRE_OFFER_MESSAGES_PER_PERSON;
   // El productor arranca la conversación con una pregunta "gratis" que ya cuenta
   // como uno de sus cuatro mensajes. Por eso su límite se cumple un mensaje antes
   // que el del artista: la oferta puede generarse automáticamente sin que el
@@ -767,17 +746,23 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
   async function appendMessage(message) {
     let nextMessages = null;
     const { ok } = await updateRequestById(request.id, (r) => {
-      // "propuesta_elegida" (o su antecesor "cerrado") todavía permite escribir
-      // hasta el límite de 4 mensajes — elegir una propuesta no es lo mismo que
-      // confirmar la contratación. Sólo "cancelado" bloquea de verdad.
-      if (esCancelado(r.estado)) return null;
+      // No confiamos en `readOnly`/`unlimited` (props calculadas al
+      // renderizar, con el estado que tenía la request cuando se abrió la
+      // pantalla) — volvemos a decidir con el estado real que acaba de leer
+      // updateRequestById: "cancelado" bloquea siempre; "reservado" sólo
+      // permite escribir al profesional elegido (chosenOfferId), y ahí sin
+      // límite de mensajes; antes de "reservado" (incluida
+      // "propuesta_elegida") cualquier conversación existente sigue
+      // permitida, sujeta al límite de 4 mensajes de siempre.
+      if (!puedeEscribirEnConversacion(r, interes.productor)) return null;
+      const sinLimite = !tieneLimiteDeMensajes(r, interes.productor);
       const intereses = r.intereses.map((it) => {
         if (it.id !== interes.id) return it;
         const currentMessages = it.mensajes?.length
           ? it.mensajes
           : [{ from: "productor", text: it.pregunta, createdAt: it.createdAt || new Date().toISOString() }];
         const senderCount = currentMessages.filter((m) => m.from === message.from).length;
-        if (senderCount >= MAX_PRE_OFFER_MESSAGES_PER_PERSON) {
+        if (!sinLimite && senderCount >= MAX_PRE_OFFER_MESSAGES_PER_PERSON) {
           nextMessages = currentMessages;
           return it;
         }
@@ -804,7 +789,7 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
     setMensajes(withArtista);
     setInput("");
     const producerCountNow = withArtista.filter((m) => m.from === "productor").length;
-    if (producerCountNow >= MAX_PRE_OFFER_MESSAGES_PER_PERSON) {
+    if (!unlimited && producerCountNow >= MAX_PRE_OFFER_MESSAGES_PER_PERSON) {
       setSending(false);
       return;
     }
@@ -843,8 +828,8 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
     const oferta = buildOfferFrom(interes);
     const { changed, ok } = await updateRequestById(request.id, (r) => {
       // Una oferta nueva de otro productor no debe pisar una propuesta ya
-      // elegida ni reabrir un pedido cancelado.
-      if (esPropuestaElegida(r.estado) || esCancelado(r.estado)) return null;
+      // elegida, un pedido reservado ni reabrir uno cancelado.
+      if (!puedeRecibirActividadDeProductores(r.estado)) return null;
       const intereses = r.intereses.map((it) => (it.id === interes.id ? { ...it, resuelto: true } : it));
       const alreadyOffered = r.ofertas.some((item) => item.productor === interes.productor);
       return { ...r, intereses, ofertas: alreadyOffered ? r.ofertas : [...r.ofertas, oferta], estado: "con_ofertas" };
@@ -876,7 +861,9 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
         <div>
           <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, color: COLORS.text, fontSize: 14.5 }}>{interes.productor}</div>
           <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: COLORS.muted }}>
-            Vos {misMensajes}/{MAX_PRE_OFFER_MESSAGES_PER_PERSON} · {interes.productor} {mensajesProductor}/{MAX_PRE_OFFER_MESSAGES_PER_PERSON}
+            {unlimited
+              ? `Vos ${misMensajes} mensajes · ${interes.productor} ${mensajesProductor} mensajes`
+              : `Vos ${misMensajes}/${MAX_PRE_OFFER_MESSAGES_PER_PERSON} · ${interes.productor} ${mensajesProductor}/${MAX_PRE_OFFER_MESSAGES_PER_PERSON}`}
           </div>
         </div>
       </div>
@@ -905,7 +892,7 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
       <div style={{ padding: "8px 22px 20px" }}>
         {readOnly && (
           <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12, marginBottom: 8 }}>
-            Este pedido fue cancelado. La conversación quedó en modo lectura.
+            {readOnlyMessage || "Esta conversación quedó en modo lectura."}
           </p>
         )}
         {!readOnly && atLimit && (
@@ -946,7 +933,7 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
 
 /* ---------------- pantalla: espera + feed + recuperación (punto 5) ---------------- */
 
-function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit, onAclaracion, onSolicitarCurado, onBack }) {
+function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit, onAclaracion, onSolicitarCurado, onStartBooking, onRequestSlot, onPayDeposit, onEnsureSlotConfirmation, onBack }) {
   const [intereses, setIntereses] = useState([]);
   const [ofertas, setOfertas] = useState([]);
   const [curados, setCurados] = useState([]);
@@ -954,6 +941,7 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
   const [recovery, setRecovery] = useState(null);
   const [estado, setEstado] = useState(request.estado);
   const [chosenOfferId, setChosenOfferId] = useState(request.chosenOfferId || null);
+  const [booking, setBooking] = useState(request.booking || null);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [aclaracionTexto, setAclaracionTexto] = useState("");
@@ -971,8 +959,15 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
       setRecovery(mine.recovery || null);
       setEstado(mine.estado);
       setChosenOfferId(mine.chosenOfferId || null);
+      setBooking(mine.booking || null);
+      // Recuperación tras una recarga (o simplemente al reabrir el pedido):
+      // si quedó pendiente de confirmar un horario, reprogramamos ese timer.
+      // onEnsureSlotConfirmation ya es idempotente (no crea uno duplicado si
+      // ya hay uno en vuelo, ni si ya no corresponde) — llamarla en cada
+      // poll es seguro y barato.
+      if (tieneProfesionalElegido(mine.estado)) onEnsureSlotConfirmation(request.id);
     }
-  }, [request.id]);
+  }, [request.id, onEnsureSlotConfirmation]);
 
   useEffect(() => {
     poll();
@@ -981,8 +976,11 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
   }, [poll]);
 
   const feedVacio = intereses.length === 0 && ofertas.length === 0;
-  const propuestaElegida = esPropuestaElegida(estado);
-  const chosenOffer = propuestaElegida ? ofertas.find((o) => o.id === chosenOfferId) || null : null;
+  // Cubre tanto "propuesta_elegida" (coordinando la reserva) como
+  // "reservado" (seña ya pagada): en los dos casos ya hay un profesional
+  // elegido y se muestra BookingFlow en vez del feed de intereses/ofertas.
+  const showBookingArea = tieneProfesionalElegido(estado);
+  const chosenOffer = showBookingArea ? ofertas.find((o) => o.id === chosenOfferId) || null : null;
 
   async function enviarAclaracion() {
     if (!aclaracionTexto.trim()) return;
@@ -1021,12 +1019,26 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
           <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 0.6, color: COLORS.muted, textTransform: "uppercase" }}>
             Pedido cancelado
           </span>
+        ) : estado === "reservado" ? (
+          // Reservado no ofrece editar ni cancelar: editar dejó de tener
+          // sentido con un profesional confirmado, y cancelar con seña
+          // pagada requiere un esquema de devoluciones que no existe en este
+          // prototipo (ver context.md).
+          <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 0.6, color: COLORS.accent, textTransform: "uppercase" }}>
+            Reserva confirmada
+          </span>
         ) : confirmingCancel ? (
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 13, color: COLORS.muted }}>¿Cancelar este pedido?</span>
             <TextLink disabled={cancelling} onClick={confirmarCancelacion}>{cancelling ? "Cancelando…" : "Sí, cancelar"}</TextLink>
             <TextLink disabled={cancelling} onClick={() => setConfirmingCancel(false)}>No</TextLink>
           </div>
+        ) : showBookingArea ? (
+          // Con una propuesta ya elegida tampoco se ofrece editar ni
+          // cancelar: la política de cancelación posterior todavía no está
+          // definida (requiere modelar devoluciones), así que sólo queda
+          // disponible antes de elegir una propuesta (ver puedeCancelarse).
+          null
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <TextLink onClick={onEdit}>Editar pedido</TextLink>
@@ -1035,8 +1047,16 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
         )}
       </div>
 
-      {propuestaElegida ? (
-        <ChosenOfferNotice offer={chosenOffer} />
+      {showBookingArea ? (
+        <BookingFlow
+          estado={estado}
+          booking={booking}
+          chosenOffer={chosenOffer}
+          onStartBooking={onStartBooking}
+          onRequestSlot={onRequestSlot}
+          onPayDeposit={onPayDeposit}
+          onRefresh={poll}
+        />
       ) : feedVacio && estado === "cancelado" ? (
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "safe center", alignItems: "center", textAlign: "center", padding: "0 26px 26px" }}>
           <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>
@@ -1225,26 +1245,6 @@ function OfferDetail({ offer, onBack, onChoose, onMessage, choosing, messaging, 
   );
 }
 
-// Se muestra dentro de WaitingScreen (no es una pantalla propia) cuando el
-// pedido tiene una propuesta elegida: todavía no hay reserva ni pago, así
-// que no se llama "confirmado" ni se saca de "en curso".
-function ChosenOfferNotice({ offer }) {
-  if (!offer) return null;
-  return (
-    <div style={{ flex: 1, minHeight: 0, padding: "30px 24px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", justifyContent: "safe center" }}>
-      <div style={{ width: 44, height: 44, borderRadius: "50%", background: COLORS.accent, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-        <span style={{ color: "#fff", fontSize: 20, fontWeight: 700 }}>✓</span>
-      </div>
-      <h2 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 20, color: COLORS.text, margin: "0 0 10px" }}>
-        Elegiste a {offer.productor}
-      </h2>
-      <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, maxWidth: 280 }}>
-        Pendiente de reserva. El siguiente paso es coordinar horario, reserva y pago con {offer.productor} — todavía no está confirmado, eso llega en el próximo bloque del prototipo.
-      </p>
-    </div>
-  );
-}
-
 /* ---------------- raíz ---------------- */
 
 export default function App() {
@@ -1274,6 +1274,9 @@ export default function App() {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [editingProfileName, setEditingProfileName] = useState(false);
   const timers = useRef([]);
+  // Ids de pedidos con un timer de confirmación de horario ya en vuelo — ver
+  // ensureSlotConfirmationScheduled más abajo.
+  const scheduledSlotConfirmations = useRef(new Set());
 
   useEffect(() => {
     (async () => {
@@ -1340,7 +1343,7 @@ export default function App() {
 
   async function isRequestStillOpen(reqId) {
     const mine = await getRequestById(reqId);
-    return mine && !esPropuestaElegida(mine.estado) && !esCancelado(mine.estado);
+    return mine && puedeRecibirActividadDeProductores(mine.estado);
   }
 
   // Compartido entre publicar (pedido nuevo) y actualizar (pedido ya publicado
@@ -1418,7 +1421,10 @@ export default function App() {
   // se limpian intereses/ofertas previos y se vuelve a correr el matching
   // sobre los datos actualizados, conservando el mismo id de pedido.
   function handleEditRequest() {
-    if (!request) return;
+    // Editar deja de ofrecerse (y de funcionar) una vez que hay un
+    // profesional elegido: el botón ya no se muestra en ese caso, pero este
+    // guard evita que una llamada residual reabra el flujo de edición.
+    if (!request || tieneProfesionalElegido(request.estado)) return;
     timers.current.forEach(clearTimeout);
     timers.current = [];
     setEditingLiveRequestId(request.id);
@@ -1491,7 +1497,7 @@ export default function App() {
           // (en particular, que una oferta directa tardía nunca convierta
           // "propuesta_elegida" en "con_ofertas").
           await updateRequestById(req.id, (r) => {
-            if (esPropuestaElegida(r.estado) || esCancelado(r.estado)) return null;
+            if (!puedeRecibirActividadDeProductores(r.estado)) return null;
             return { ...r, ofertas: [...r.ofertas, oferta], estado: "con_ofertas" };
           });
         } else {
@@ -1504,7 +1510,7 @@ export default function App() {
             createdAt,
           };
           await updateRequestById(req.id, (r) => {
-            if (esPropuestaElegida(r.estado) || esCancelado(r.estado)) return null;
+            if (!puedeRecibirActividadDeProductores(r.estado)) return null;
             return { ...r, intereses: [...r.intereses, interes] };
           });
         }
@@ -1523,7 +1529,7 @@ export default function App() {
       // que una recuperación tardía no se aplique sobre un pedido que ya
       // tiene propuesta elegida o fue cancelado entre la lectura y la escritura.
       await updateRequestById(req.id, (r) => {
-        if (esPropuestaElegida(r.estado) || esCancelado(r.estado)) return null;
+        if (!puedeRecibirActividadDeProductores(r.estado)) return null;
         return { ...r, recovery: recoveryTipo, curados };
       });
     }, recoveryDelay);
@@ -1548,20 +1554,20 @@ export default function App() {
   async function handleSolicitarCurado(productorData) {
     const oferta = buildOfferFrom(productorData);
     const { changed, ok } = await updateRequestById(request.id, (r) => {
-      if (esPropuestaElegida(r.estado) || esCancelado(r.estado)) return null;
+      if (!puedeRecibirActividadDeProductores(r.estado)) return null;
       return { ...r, recovery: null, curados: [], ofertas: [...r.ofertas, oferta], estado: "con_ofertas" };
     });
     return changed && ok;
   }
 
-  // Elegir una propuesta no confirma la contratación todavía: falta reserva
-  // y pago, que no existen en este prototipo. El pedido sigue "en curso" con
-  // estado "propuesta_elegida" — no se lo trata como cerrado/finalizado.
+  // Elegir una propuesta no confirma la contratación todavía: falta coordinar
+  // horario y pagar la seña (ver BookingFlow) antes de pasar a "reservado".
+  // El pedido sigue "en curso" con estado "propuesta_elegida" mientras tanto.
   async function handleChoose(offer) {
     setChoosing(true);
     setChooseError(null);
     const { changed, ok } = await updateRequestById(request.id, (r) => {
-      if (esPropuestaElegida(r.estado) || esCancelado(r.estado)) return null;
+      if (!puedeRecibirActividadDeProductores(r.estado)) return null;
       return { ...r, estado: "propuesta_elegida", chosenOfferId: offer.id };
     });
     setChoosing(false);
@@ -1577,6 +1583,79 @@ export default function App() {
     // cerrar OfferDetail cae de nuevo en WaitingScreen, que ya sabe mostrar
     // el aviso de "propuesta elegida" según el estado recién guardado.
     setSelectedOffer(null);
+  }
+
+  // Primer tramo de contratación (propuesta_elegida -> horario -> seña ->
+  // reservado). "Coordinar reserva" crea el booking la primera vez que se
+  // toca — es idempotente: si ya existe (por ejemplo, se volvió a entrar
+  // después de un back o una recarga), applyStartBooking no lo pisa ni
+  // regenera los horarios (ver domain/booking.js para la condición exacta).
+  async function handleStartBooking() {
+    if (!request) return false;
+    const { ok, request: updated } = await updateRequestById(request.id, (r) => {
+      const chosen = (r.ofertas || []).find((o) => o.id === r.chosenOfferId);
+      if (!chosen) return null;
+      return applyStartBooking(r, calculateArtistFinalPrice(chosen.producerAmount));
+    });
+    if (ok && updated) return true;
+    const mine = await getRequestById(request.id);
+    return !!mine?.booking;
+  }
+
+  async function handleRequestSlot(slot) {
+    if (!request) return false;
+    const { changed, ok } = await updateRequestById(request.id, (r) => applyRequestSlot(r, slot));
+    if (!(changed && ok)) return false;
+    ensureSlotConfirmationScheduled(request.id);
+    return true;
+  }
+
+  // Garantiza un único timer de confirmación de horario en vuelo por pedido,
+  // sin importar cuántas veces se llame (cada solicitud de horario, cada
+  // poll de WaitingScreen al abrir/reabrir el pedido, o después de una
+  // recarga). `scheduledSlotConfirmations` se reserva de forma síncrona
+  // antes de cualquier await, así dos llamadas casi simultáneas no pueden
+  // programar dos timers para el mismo id (una carrera análoga a la que ya
+  // resuelve updateRequestById, pero acá sobre el propio Set en memoria).
+  //
+  // La recuperación después de una recarga sale gratis: como el timer vive
+  // en memoria del tab, se pierde igual que los de scheduleSimulatedProducers
+  // — pero acá, a diferencia de aquellos, WaitingScreen vuelve a llamar a
+  // esta función en cada poll mientras el pedido siga con un profesional
+  // elegido, así que apenas se reabre el pedido (o el mount inicial tras la
+  // recarga hace el primer poll) se vuelve a programar, usando
+  // requestedAt para calcular cuánto falta de los 2,5 segundos originales —
+  // o confirmando de inmediato si el plazo ya pasó.
+  async function ensureSlotConfirmationScheduled(reqId) {
+    if (scheduledSlotConfirmations.current.has(reqId)) return;
+    scheduledSlotConfirmations.current.add(reqId);
+    const mine = await getRequestById(reqId);
+    if (!mine || !canConfirmSlot(mine)) {
+      scheduledSlotConfirmations.current.delete(reqId);
+      return;
+    }
+    const delayMs = getRemainingConfirmationDelay(mine);
+    const t = setTimeout(async () => {
+      scheduledSlotConfirmations.current.delete(reqId);
+      // Se vuelve a validar el estado real antes de escribir: entre
+      // programar este timer y que corra, el booking podría haber avanzado
+      // o el pedido podría ya no aceptar esta transición — applyConfirmSlot
+      // exige exactamente propuesta_elegida (o su legacy) + booking pendiente
+      // + horario solicitado + sin confirmar todavía.
+      await updateRequestById(reqId, (r) => applyConfirmSlot(r));
+    }, delayMs);
+    timers.current.push(t);
+  }
+
+  // Pago simulado de la seña. Idempotente: applyPayDeposit sólo aplica si el
+  // booking está exactamente en "slot_confirmed"; un doble click, una
+  // reapertura o un reintento después de un fallo de guardado ven que ya no
+  // está en ese estado y no hacen nada (changed: false), sin duplicar ni
+  // alterar `depositPaidAt`.
+  async function handlePayDeposit() {
+    if (!request) return { changed: false, ok: false };
+    const { changed, ok } = await updateRequestById(request.id, (r) => applyPayDeposit(r));
+    return { changed, ok };
   }
 
   async function handleMessageOffer(offer) {
@@ -1636,7 +1715,14 @@ export default function App() {
   async function handleCancel() {
     const cancelledId = request ? request.id : null;
     if (!cancelledId) return false;
-    const { changed, ok } = await updateRequestById(cancelledId, (r) => ({ ...r, estado: "cancelado" }));
+    // La política de cancelación posterior a elegir una propuesta (o a
+    // reservado) todavía no está definida — el botón ya no se muestra en
+    // esos casos, pero este guard persistido rechaza igual una cancelación
+    // residual si de algún modo se invoca.
+    const { changed, ok } = await updateRequestById(cancelledId, (r) => {
+      if (!puedeCancelarse(r.estado)) return null;
+      return { ...r, estado: "cancelado" };
+    });
     if (!(changed && ok)) return false;
     timers.current.forEach(clearTimeout);
     timers.current = [];
@@ -1731,6 +1817,10 @@ export default function App() {
   } else if (selectedOffer) {
     body = <OfferDetail offer={selectedOffer} choosing={choosing} messaging={messaging} chooseError={chooseError} onBack={() => { setSelectedOffer(null); setChooseError(null); }} onMessage={() => handleMessageOffer(selectedOffer)} onChoose={() => handleChoose(selectedOffer)} />;
   } else if (openInteres) {
+    // Estas dos props sólo controlan la UI (deshabilitar la caja de texto,
+    // mostrar el aviso correcto) — la validación real vuelve a hacerse desde
+    // el dato persistido, dentro del updater que guarda cada mensaje
+    // (appendMessage en ConversationScreen), usando las mismas funciones.
     body = (
       <ConversationScreen
         request={request}
@@ -1739,7 +1829,13 @@ export default function App() {
         onBack={closeConversation}
         onOfferGenerated={() => {}}
         returnLabel={conversationOpenedFromMensajes ? "Volver a mensajes" : null}
-        readOnly={esCancelado(request?.estado)}
+        readOnly={!request || !puedeEscribirEnConversacion(request, openInteres.productor)}
+        readOnlyMessage={
+          esCancelado(request?.estado)
+            ? "Este pedido fue cancelado. La conversación quedó en modo lectura."
+            : "Esta conversación quedó como historial: elegiste a otro profesional para este pedido."
+        }
+        unlimited={!!request && !tieneLimiteDeMensajes(request, openInteres.productor)}
       />
     );
   } else if (request && !editingLiveRequestId) {
@@ -1752,6 +1848,10 @@ export default function App() {
         onEdit={handleEditRequest}
         onAclaracion={handleAclaracion}
         onSolicitarCurado={handleSolicitarCurado}
+        onStartBooking={handleStartBooking}
+        onRequestSlot={handleRequestSlot}
+        onPayDeposit={handlePayDeposit}
+        onEnsureSlotConfirmation={ensureSlotConfirmationScheduled}
         onBack={handleCloseRequestDetail}
       />
     );

@@ -158,3 +158,36 @@ export function ProducerPhoto({ name, width = 44, height = 44, radius = 10 }) {
     />
   );
 }
+
+function lowerFirstLabel(label) {
+  if (typeof label !== "string" || !label) return label;
+  return label.toLocaleLowerCase("es-AR");
+}
+
+// Fila de opción grande (modalidad, ubicación, franja, géneros, horarios de
+// reserva…): texto en minúscula con un punto azul cuando está seleccionada.
+export function BigOption({ label, selected, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="press"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        width: "100%",
+        textAlign: "left",
+        background: "none",
+        border: "none",
+        borderBottom: `1px solid ${COLORS.border}`,
+        padding: "14px 2px",
+        cursor: "pointer",
+      }}
+    >
+      <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: selected ? 700 : 500, fontSize: 16.5, color: selected ? COLORS.text : COLORS.muted }}>
+        {lowerFirstLabel(label)}
+      </span>
+      {selected && <span style={{ width: 7, height: 7, borderRadius: "50%", background: COLORS.accent, flexShrink: 0 }} />}
+    </button>
+  );
+}

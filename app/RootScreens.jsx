@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
 import { Screen, Label, TextLink, PrimaryButton, UnderlineField, ProducerPhoto } from "./ui/pieces.jsx";
 import { getAllRequests } from "./lib/storage.js";
-import { ESTADO_LABELS, esPropuestaElegida, esActivo } from "./domain/estado.js";
+import { ESTADO_LABELS, esPropuestaElegida, esActivo, tieneProfesionalElegido } from "./domain/estado.js";
 
 /* ============================================================
    Pantallas raíz de la navegación (Inicio / Pedidos / Mensajes / Perfil)
@@ -63,6 +63,13 @@ function formatWhen(iso) {
 // Misma copia que ya usa WaitingScreen para cada situación — acá solo se
 // elige cuál mostrar según los datos reales del pedido, sin inventar nada.
 function ultimaNovedad(r) {
+  if (r.estado === "reservado") {
+    const chosen = (r.ofertas || []).find((o) => o.id === r.chosenOfferId);
+    const horario = r.booking?.selectedSlot?.label;
+    return chosen
+      ? `Reserva confirmada con ${chosen.productor}${horario ? ` para ${horario}` : ""}.`
+      : "Reserva confirmada.";
+  }
   if (esPropuestaElegida(r.estado)) {
     const chosen = (r.ofertas || []).find((o) => o.id === r.chosenOfferId);
     return chosen ? `Elegiste a ${chosen.productor}. Pendiente de coordinar horario, reserva y pago.` : "Pendiente de coordinar horario, reserva y pago.";
@@ -159,7 +166,7 @@ export function HomeScreen({ artistName, onSubmit, interpreting, error, text, on
 /* ---------------- Pedidos ---------------- */
 
 function OrderRow({ request, onOpen }) {
-  const chosen = esPropuestaElegida(request.estado) ? (request.ofertas || []).find((o) => o.id === request.chosenOfferId) : null;
+  const chosen = tieneProfesionalElegido(request.estado) ? (request.ofertas || []).find((o) => o.id === request.chosenOfferId) : null;
   const hasOfertas = (request.ofertas || []).length > 0;
   const hasConversacion = (request.intereses || []).length > 0;
   return (
