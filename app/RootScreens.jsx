@@ -14,12 +14,28 @@ import {
    WaitingScreen, filtrados por artista.
    ============================================================ */
 
+// El ciclo de vida real de este prototipo es esperando -> con_ofertas ->
+// propuesta_elegida -> cancelado. "reservado", "en_curso" y "finalizado"
+// quedan documentados en context.md pero no existen todavía porque reserva
+// y pago no están implementados. "cerrado" es el nombre anterior de
+// "propuesta_elegida" — un pedido guardado con ese estado se trata igual
+// (ver migración en ColabApp.jsx) aunque no haya llegado a migrarse todavía.
 const ESTADO_LABELS = {
-  esperando: "Esperando productores",
+  esperando: "Esperando profesionales",
   con_ofertas: "Con propuestas",
-  cerrado: "Confirmado",
+  propuesta_elegida: "Propuesta elegida",
+  cerrado: "Propuesta elegida",
   cancelado: "Cancelado",
 };
+
+function esPropuestaElegida(estado) {
+  return estado === "propuesta_elegida" || estado === "cerrado";
+}
+// Todo lo que no esté cancelado sigue "en curso" en este prototipo — no hay
+// todavía un estado "finalizado" real que mover a "Anteriores".
+function esActivo(estado) {
+  return estado !== "cancelado";
+}
 
 const heading1 = { fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 24, color: COLORS.text, margin: "0 0 4px", lineHeight: 1.25 };
 const mutedSmall = { fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 13, color: COLORS.muted, lineHeight: 1.5 };
@@ -70,6 +86,10 @@ function formatWhen(iso) {
 // Misma copia que ya usa WaitingScreen para cada situación — acá solo se
 // elige cuál mostrar según los datos reales del pedido, sin inventar nada.
 function ultimaNovedad(r) {
+  if (esPropuestaElegida(r.estado)) {
+    const chosen = (r.ofertas || []).find((o) => o.id === r.chosenOfferId);
+    return chosen ? `Elegiste a ${chosen.productor}. Pendiente de coordinar horario, reserva y pago.` : "Pendiente de coordinar horario, reserva y pago.";
+  }
   if ((r.ofertas || []).length > 0) {
     const n = r.ofertas.length;
     return `Tenés ${n} propuesta${n > 1 ? "s" : ""} esperando tu respuesta.`;
@@ -80,7 +100,7 @@ function ultimaNovedad(r) {
   if (r.recovery === "aclaracion") return "Necesitamos una aclaración tuya para seguir buscando.";
   return r.matchAmpliado
     ? "Estamos ampliando la búsqueda a más estilos para encontrarte opciones."
-    : "Estamos seleccionando productores que puedan encajar con lo que querés hacer.";
+    : "Estamos seleccionando profesionales que puedan encajar con lo que querés hacer.";
 }
 
 function NavRow({ label, onClick }) {
@@ -113,7 +133,7 @@ function RootHeader({ title, children }) {
 
 export function HomeScreen({ artistName, onSubmit, interpreting, error, text, onTextChange, onOpenRequest }) {
   const requests = useMyRequests(artistName);
-  const active = requests.find((r) => r.estado === "esperando" || r.estado === "con_ofertas") || null;
+  const active = requests.find((r) => esActivo(r.estado)) || null;
 
   return (
     <div style={{ padding: "22px 22px 26px", display: "flex", flexDirection: "column", gap: 26 }}>
@@ -162,7 +182,7 @@ export function HomeScreen({ artistName, onSubmit, interpreting, error, text, on
 /* ---------------- Pedidos ---------------- */
 
 function OrderRow({ request, onOpen }) {
-  const chosen = request.estado === "cerrado" ? (request.ofertas || []).find((o) => o.id === request.chosenOfferId) : null;
+  const chosen = esPropuestaElegida(request.estado) ? (request.ofertas || []).find((o) => o.id === request.chosenOfferId) : null;
   const hasOfertas = (request.ofertas || []).length > 0;
   const hasConversacion = (request.intereses || []).length > 0;
   return (
@@ -194,15 +214,15 @@ function OrderRow({ request, onOpen }) {
 
 export function OrdersScreen({ artistName, onOpenRequest, onCreate }) {
   const requests = useMyRequests(artistName);
-  const enCurso = requests.filter((r) => r.estado === "esperando" || r.estado === "con_ofertas");
-  const anteriores = requests.filter((r) => r.estado === "cerrado" || r.estado === "cancelado");
+  const enCurso = requests.filter((r) => esActivo(r.estado));
+  const anteriores = requests.filter((r) => !esActivo(r.estado));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <RootHeader title="Tus pedidos" />
       {requests.length === 0 ? (
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "safe center", alignItems: "center", textAlign: "center", padding: "0 26px 26px" }}>
-          <p style={{ ...mutedSmall, marginBottom: 18 }}>Todavía no tenés pedidos. Contale a COLAB qué querés hacer y te ayudamos a encontrar productores.</p>
+          <p style={{ ...mutedSmall, marginBottom: 18 }}>Todavía no tenés pedidos. Contale a COLAB qué querés hacer y te ayudamos a encontrar profesionales.</p>
           <PrimaryButton onClick={onCreate}>Crear un pedido</PrimaryButton>
         </div>
       ) : (
@@ -339,7 +359,10 @@ export function EditNameScreen({ currentName, onSave, onBack }) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
 
+  const nameValid = name.trim().length >= 2;
+
   async function handleSave() {
+    if (!nameValid || saving) return;
     setSaving(true);
     setSaveError(null);
     const ok = await onSave(name.trim());
@@ -353,7 +376,7 @@ export function EditNameScreen({ currentName, onSave, onBack }) {
       <UnderlineField value={name} onChange={(e) => setName(e.target.value)} autoFocus onKeyDown={(e) => e.key === "Enter" && handleSave()} />
       {saveError && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, marginTop: 10 }}>{saveError}</p>}
       <div style={{ marginTop: 24 }}>
-        <PrimaryButton full disabled={name.trim().length < 2 || saving} onClick={handleSave}>
+        <PrimaryButton full disabled={!nameValid || saving} onClick={handleSave}>
           {saving ? "Guardando…" : "Guardar"}
         </PrimaryButton>
       </div>
@@ -366,15 +389,15 @@ export function EditNameScreen({ currentName, onSave, onBack }) {
 const FAQ_ITEMS = [
   {
     q: "¿Puedo editar un pedido después de publicarlo?",
-    a: "Sí. Desde tu pedido tocá \"Editar pedido\". Al actualizar, las conversaciones y propuestas anteriores se cierran y volvemos a buscar productores con los datos nuevos.",
+    a: "Sí. Desde tu pedido tocá \"Editar pedido\". Al actualizar, las conversaciones y propuestas anteriores se cierran y volvemos a buscar profesionales con los datos nuevos.",
   },
   {
     q: "¿Cuántos mensajes puedo mandar antes de recibir una propuesta?",
-    a: "Hasta cuatro mensajes por persona antes de una oferta formal. Una vez que elegís una propuesta, la conversación queda sin ese límite.",
+    a: "Hasta cuatro mensajes por persona antes de una oferta formal. El chat sin límite se habilita después de confirmar la contratación (con reserva y pago) — elegir una propuesta todavía no lo desbloquea.",
   },
   {
-    q: "¿Qué pasa si ningún productor responde?",
-    a: "Te pedimos una aclaración o te mostramos productores con horario disponible ahora, según el caso.",
+    q: "¿Qué pasa si ningún profesional responde?",
+    a: "Te pedimos una aclaración o te mostramos profesionales con horario disponible ahora, según el caso.",
   },
   {
     q: "¿Puedo cancelar un pedido?",
@@ -439,7 +462,7 @@ export function HelpScreen({ artistName, onBack }) {
       )}
       {view === "problema-enviado" && (
         <p style={mutedSmall}>
-          Recibimos tu mensaje sobre "{selectedRequest?.resumen}". Todavía no tenemos definidos los plazos ni el proceso de resolución — te contactamos apenas podamos.
+          Esto es una simulación de este prototipo: tu mensaje sobre "{selectedRequest?.resumen}" no se guardó ni se envió a ningún lado. Todavía no tenemos definidos los plazos ni el proceso de resolución para este tipo de casos.
         </p>
       )}
 
@@ -452,7 +475,9 @@ export function HelpScreen({ artistName, onBack }) {
           </div>
         </>
       )}
-      {view === "contactar-enviado" && <p style={mutedSmall}>Gracias, te contactamos pronto.</p>}
+      {view === "contactar-enviado" && (
+        <p style={mutedSmall}>Esto es una simulación de este prototipo: tu mensaje no se guardó ni se envió a ningún lado.</p>
+      )}
     </Screen>
   );
 }

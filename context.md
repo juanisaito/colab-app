@@ -2,6 +2,43 @@
 
 Actualizado: 29 de agosto de 2026.
 
+## Corrección de inconsistencias de la navegación (misma sesión, más tarde)
+
+Después de armar la navegación por pestañas, se corrigieron cuatro inconsistencias que quedaron expuestas por tener por primera vez botones de "volver" y una lista de pedidos persistente.
+
+### 1. Ciclo de vida real del pedido
+
+Elegir una propuesta **no** es lo mismo que confirmar una contratación — todavía no existen reserva ni pago. El estado que antes se llamaba `"cerrado"` pasó a llamarse **`propuesta_elegida`**, y sigue contando como pedido **activo**:
+
+- Ciclo implementado en este prototipo: `esperando` → `con_ofertas` → `propuesta_elegida` → `cancelado`.
+- Estados futuros **documentados pero no implementados todavía** (requieren reserva y pago reales): `reservado`, `en_curso`, `finalizado`. Cuando existan, recién ahí `finalizado` (y no `propuesta_elegida`) pasará a "Anteriores".
+- `propuesta_elegida` sigue apareciendo en "En curso" (Pedidos) y como proyecto activo en Inicio, con la etiqueta "Propuesta elegida" — nunca "Confirmado".
+- Al abrir un pedido con `propuesta_elegida`, `WaitingScreen` deja de mostrar el feed de intereses/ofertas y muestra en su lugar quién fue elegido y una explicación de que el siguiente paso es coordinar horario, reserva y pago (ver `ChosenOfferNotice` en `ColabApp.jsx`). Ya no existe una pantalla aparte (`ChosenScreen`) desconectada de la pestaña Pedidos: se unificó dentro de `WaitingScreen`, así "volver" siempre cae en la pestaña correcta sin tener que rastrear desde dónde se abrió.
+
+**Migración de datos existentes:** al montar la app corre `migrateLegacyClosedRequests()` (en `ColabApp.jsx`), que lee todos los pedidos guardados y reescribe `estado: "cerrado"` → `estado: "propuesta_elegida"` — es la única migración, no destructiva (ningún otro campo se toca, y `chosenOfferId` se conserva tal cual). Por las dudas de que algún pedido se lea antes de que la migración termine de correr, todos los lugares que distinguen "propuesta elegida" (agrupación de Pedidos, módulo de Inicio, guards de `handleChoose`/`handleMessageOffer`/etc.) tratan `"cerrado"` como sinónimo de `"propuesta_elegida"`, no sólo el resultado ya migrado.
+
+### 2. Chat después de elegir una propuesta
+
+Elegir una propuesta **no** desbloquea chat ilimitado — eso se documenta acá como decisión pendiente de producto, para implementar recién cuando exista una contratación confirmada (reserva + pago reales). El límite de cuatro mensajes por persona sigue rigiendo igual para `propuesta_elegida` que para cualquier otro pedido activo.
+
+- Un pedido `cancelado` abre su conversación en modo lectura real: sin caja de texto ni botón "Enviar", con una nota explicando que quedó así. Antes, escribir en el chat de un pedido cerrado/cancelado fallaba en silencio y mostraba "No pudimos guardar el mensaje" — un error técnico genérico para lo que en realidad era una regla de negocio. Ahora la interfaz ni siquiera ofrece la caja de texto en ese caso.
+- Se encontró el mismo problema en un segundo lugar: cuando el chat de **otro** productor llegaba a su propio límite de 4 mensajes en un pedido que ya tenía `propuesta_elegida`, intentaba generar una oferta formal nueva, el guardado se rechazaba a propósito (no se puede pisar una propuesta ya elegida) y mostraba "No pudimos generar la propuesta. Probá de nuevo." — again un error técnico donde en realidad no había ningún problema real que reintentar. Ahora ese caso no muestra ningún error: el aviso de límite de mensajes ya alcanza como explicación.
+- FAQ corregida (Ayuda y soporte): decía que elegir una propuesta desbloqueaba el chat sin límite. Ahora aclara que eso se habilita recién al confirmar la contratación (con reserva y pago), no al elegir.
+
+**Decisión de producto documentada, sin implementar todavía:** el historial de chat de cada pedido se conserva **seis meses**. Falta definir el mecanismo real de borrado automático — depende de almacenamiento y backend que todavía no existen en este prototipo (hoy todo vive en `localStorage`, sin expiración).
+
+### 3. Lenguaje: "profesionales" en las superficies generales
+
+COLAB va a conectar con productores, sonidistas, iluminadores y otros técnicos — no sólo productores. En las superficies donde todavía no se sabe el rol concreto (Inicio, Pedidos, Mensajes, estados vacíos, y los textos de recuperación de `WaitingScreen`: "esperando…", "buscando…", FAQ genérica) se cambió "productor/productores" por "profesional/profesionales". Donde el pedido ya fue interpretado y hay un nombre de persona concreto (ej. "Tomás Ibarra quiere conocer mejor tu proyecto"), no se tocó nada — eso ya es específico, no generico. **No se tocó el matching, `OFFER_POOL` ni ningún dato hardcodeado de productores** — sigue siendo la misma base de productores simulados de siempre; sólo cambió el copy genérico.
+
+### 4. Correcciones chicas
+
+- `EditNameScreen`: apretar Enter con un nombre de menos de 2 caracteres ya no guarda — antes el atajo de teclado no respetaba la misma validación que el botón "Guardar" (que sí estaba bien deshabilitado).
+- Ayuda y soporte: "Tengo un problema con un pedido" y "Contactar a COLAB" ya no dicen "te contactamos pronto" — como ningún mensaje se guarda ni se envía a ningún lado todavía, ahora la confirmación aclara explícitamente que es una simulación de este prototipo.
+- **Deuda técnica documentada, sin resolver todavía:** `ColabApp.jsx` y `RootScreens.jsx`/`BottomNav.jsx` se importan mutuamente (uno arma la navegación con pantallas del otro; el otro reusa piezas visuales del primero). Ya causó un bug real esta sesión (`COLORS` usado en el nivel superior de ambos módulos disparaba `ReferenceError: Cannot access before initialization`), resuelto moviendo sólo `COLORS` a `theme.js`. El resto de las piezas compartidas (`Screen`, `PrimaryButton`, `storageGet`, etc.) no tiene el mismo problema porque sólo se usan dentro de cuerpos de función, pero el ciclo en sí sigue ahí. Antes del próximo bloque grande conviene resolverlo de raíz — por ejemplo, separando explícitamente una capa de "piezas compartidas" (`theme.js`, y un futuro `ui.jsx`) de la que ambos módulos importen, sin que `ColabApp.jsx` y `RootScreens.jsx` se necesiten entre sí directamente.
+
+Verificado con Playwright (elegir una propuesta y volver a Pedidos/Inicio, abrir desde Mensajes una conversación con propuesta elegida y usar los mensajes restantes hasta 4/4, chat de pedido cancelado sin caja de texto, datos legacy con `estado: "cerrado"` sin desaparecer y migrados correctamente, Enter con nombre de 1 carácter) contra el servidor de desarrollo y también contra la **build de producción** (`pnpm build` + `vite preview`), sin diferencias. Batería de lógica y flujo existente sin regresiones.
+
 ## Navegación por pestañas (sesión del 29 de agosto de 2026 con Claude Code)
 
 El prototipo del artista dejó de ser un flujo 100% lineal: ahora es una app navegable con una **barra inferior fija** de cuatro pestañas — Inicio, Pedidos, Mensajes, Perfil — construida sobre la misma lógica de negocio ya auditada (matching, chat con límite de 4 mensajes, edición, recuperación). No se tocó ninguna decisión de producto ya cerrada; esto es exclusivamente arquitectura de navegación.
@@ -11,12 +48,12 @@ El prototipo del artista dejó de ser un flujo 100% lineal: ahora es una app nav
 - `app/BottomNav.jsx` — la barra inferior y sus 4 íconos (SVG en línea, sin librería).
 - `app/RootScreens.jsx` — `HomeScreen`, `OrdersScreen`, `MessagesScreen`, `ProfileScreen`, `HelpScreen`, `PrivacyScreen`, `EditNameScreen`. Cada pantalla lee sus propios pedidos de `localStorage` con el mismo patrón de polling que ya usaba `WaitingScreen`, filtrados por `artistName === profile.name` (antes no existía ningún filtro por artista, porque nunca había una pantalla que listara "todos mis pedidos").
 
-**Cómo se decide pestañas vs. flujo interno**, en `App` (`ColabApp.jsx`): un solo booleano, `inFlowMode`, es `true` si hay una creación/edición en curso, un pedido abierto, una conversación, una oferta, "elegiste a X", Ayuda, Privacidad o edición de perfil — en ese caso se oculta la barra y se muestra la pantalla interna correspondiente con su propio "‹ Atrás". Si no, se muestra la pestaña activa (`activeTab`) con la barra visible. Cambiar de pestaña nunca toca `request`/`classification`/etc., así que la pestaña activa persiste sola mientras se navega — no hizo falta llevar un registro de "desde dónde se abrió cada pantalla".
+**Cómo se decide pestañas vs. flujo interno**, en `App` (`ColabApp.jsx`): un solo booleano, `inFlowMode`, es `true` si hay una creación/edición en curso, un pedido abierto (incluida una propuesta ya elegida — ver más abajo), una conversación, una oferta, Ayuda, Privacidad o edición de perfil — en ese caso se oculta la barra y se muestra la pantalla interna correspondiente con su propio "‹ Atrás". Si no, se muestra la pestaña activa (`activeTab`) con la barra visible. Cambiar de pestaña nunca toca `request`/`classification`/etc., así que la pestaña activa persiste sola mientras se navega — no hizo falta llevar un registro de "desde dónde se abrió cada pantalla".
 
 **Bugs reales encontrados y corregidos durante esta implementación** (no eran bugs antes porque no existía forma de "volver" desde esas pantallas):
 1. `handlePublish`/`handleUpdateRequest` nunca limpiaban `classification`/`context` al terminar. Con el nuevo botón "‹ Atrás" en `WaitingScreen`, volver desde un pedido recién publicado mostraba de nuevo el resumen viejo en vez de la pestaña Pedidos. Se agregó `handleCloseRequestDetail` que limpia todo correctamente.
 2. Cambiar el nombre artístico (Perfil → Editar) no actualizaba el `artistName` de los pedidos ya guardados — como Pedidos/Mensajes/Inicio filtran por ese campo (no hay un id de usuario en este prototipo), renombrarse "perdía" el historial. Ahora `handleSaveProfileName` migra `artistName` en todos los pedidos existentes al guardar el nuevo nombre.
-3. Un pedido cancelado con el feed vacío seguía mostrando "Tu proyecto ya está en movimiento" y "buscando productores", que ya no es cierto. Ahora muestra un texto acorde ("Este pedido fue cancelado…").
+3. Un pedido cancelado con el feed vacío seguía mostrando "Tu proyecto ya está en movimiento" y "buscando profesionales", que ya no es cierto. Ahora muestra un texto acorde ("Este pedido fue cancelado…").
 
 **Qué es real y qué sigue simulado:**
 - **Real**: los pedidos, conversaciones, ofertas y estados que se listan en Pedidos/Mensajes/Inicio salen directamente de `localStorage`, no hay datos inventados. Editar, cancelar, publicar y el chat existente funcionan igual que antes, ahora alcanzables desde la navegación.
@@ -512,4 +549,4 @@ Cambios de código en `app/ColabApp.jsx` (Build 5), a partir de la decisión de 
 - Editar reabre el mismo flujo de clasificación → contexto → resumen que se usa antes de publicar, con los valores existentes precargados en modo revisión (`reviewExisting`), incluyendo la posibilidad de reescribir el texto original del pedido.
 - Al confirmar la edición (“Actualizar pedido”), se actualiza el pedido existente (mismo id) en lugar de crear uno nuevo: se recalculan tipo, contexto de matching y géneros; se limpian intereses, ofertas, curados y estado de recuperación; el estado vuelve a “esperando”; y se reinicia la simulación de productores sobre los datos nuevos. El artista lo ve anunciado explícitamente antes de confirmar (“las conversaciones y propuestas que ya tenías se cierran y volvemos a buscar productores con los datos nuevos”), consistente con que es el sistema —no el artista— quien gestiona la reasignación.
 - El artista puede abandonar la edición en cualquier punto y volver a su pedido sin guardar cambios (“‹ Volver a mi pedido”).
-- **Fuera de alcance de este build:** editar un pedido después de haber elegido una propuesta formal. `ChosenScreen` sigue siendo un placeholder a la espera del prototipo de reserva, pago y agenda; recién ahí tiene sentido modelar la reasignación de fondos retenidos que pide la decisión de la reunión (seña del 25%, saldo y liberación post-sesión).
+- **Fuera de alcance de este build:** editar un pedido después de haber elegido una propuesta formal (estado `propuesta_elegida`, ver sección más arriba). El aviso de "próximo paso: coordinar horario, reserva y pago" que se muestra en ese caso sigue siendo un placeholder a la espera del prototipo de reserva, pago y agenda; recién ahí tiene sentido modelar la reasignación de fondos retenidos que pide la decisión de la reunión (seña del 25%, saldo y liberación post-sesión).

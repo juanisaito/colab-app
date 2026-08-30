@@ -1401,7 +1401,7 @@ const CANNED_PRODUCER_REPLIES = [
   "Perfecto, con eso ya entiendo mejor por dónde encararlo.",
 ];
 
-function ConversationScreen({ request, interes, onBack, onOfferGenerated, formalOfferExists = false, returnLabel }) {
+function ConversationScreen({ request, interes, onBack, onOfferGenerated, formalOfferExists = false, returnLabel, readOnly = false }) {
   const initialMessages = interes.mensajes?.length
     ? interes.mensajes
     : [{ from: "productor", text: interes.pregunta, createdAt: interes.createdAt || new Date().toISOString() }];
@@ -1438,7 +1438,10 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
     let nextMessages = null;
     const updated = all.map((r) => {
       if (r.id !== request.id) return r;
-      if (r.estado === "cerrado" || r.estado === "cancelado") return r;
+      // "propuesta_elegida" (o su antecesor "cerrado") todavía permite escribir
+      // hasta el límite de 4 mensajes — elegir una propuesta no es lo mismo que
+      // confirmar la contratación. Sólo "cancelado" bloquea de verdad.
+      if (r.estado === "cancelado") return r;
       const intereses = r.intereses.map((it) => {
         if (it.id !== interes.id) return it;
         const currentMessages = it.mensajes?.length
@@ -1461,7 +1464,7 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
 
   async function send() {
     const t = input.trim();
-    if (!t || sending || atLimit) return;
+    if (!t || sending || atLimit || readOnly) return;
     setSending(true);
     setConversationError(null);
     const withArtista = await appendMessage({ from: "artista", text: t, createdAt: new Date().toISOString() });
@@ -1514,13 +1517,22 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
     let changed = false;
     const updated = all.map((r) => {
       if (r.id !== request.id) return r;
-      if (r.estado === "cerrado" || r.estado === "cancelado") return r;
+      // Una oferta nueva de otro productor no debe pisar una propuesta ya
+      // elegida ni reabrir un pedido cancelado.
+      if (r.estado === "propuesta_elegida" || r.estado === "cerrado" || r.estado === "cancelado") return r;
       const intereses = r.intereses.map((it) => (it.id === interes.id ? { ...it, resuelto: true } : it));
       const alreadyOffered = r.ofertas.some((item) => item.productor === interes.productor);
       changed = true;
       return { ...r, intereses, ofertas: alreadyOffered ? r.ofertas : [...r.ofertas, oferta], estado: "con_ofertas" };
     });
-    const ok = changed && await storageSet(REQUESTS_KEY, updated, true);
+    if (!changed) {
+      // El pedido ya tiene una decisión tomada (propuesta elegida o
+      // cancelado) — no es una falla técnica, así que no hace falta un
+      // mensaje de error: el aviso de límite de mensajes ya alcanza.
+      setRequestingOffer(false);
+      return;
+    }
+    const ok = await storageSet(REQUESTS_KEY, updated, true);
     setRequestingOffer(false);
     if (!ok) {
       setConversationError("No pudimos generar la propuesta. Probá de nuevo.");
@@ -1568,27 +1580,34 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
       </div>
 
       <div style={{ padding: "8px 22px 20px" }}>
-        {atLimit && (
+        {readOnly && (
+          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12, marginBottom: 8 }}>
+            Este pedido fue cancelado. La conversación quedó en modo lectura.
+          </p>
+        )}
+        {!readOnly && atLimit && (
           <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12, marginBottom: 8 }}>
             {offerAvailable
               ? `Llegaste al límite de ${MAX_PRE_OFFER_MESSAGES_PER_PERSON} mensajes. Ya podés volver a la propuesta y decidir.`
               : `Llegaste al límite de ${MAX_PRE_OFFER_MESSAGES_PER_PERSON} mensajes. Si ${interes.productor} avanza, su propuesta aparece en el pedido.`}
           </p>
         )}
-        {conversationError && (
+        {!readOnly && conversationError && (
           <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12, marginBottom: 8 }}>{conversationError}</p>
         )}
-        <div style={{ marginBottom: 10 }}>
-          <UnderlineField
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder={atLimit ? "Sin mensajes disponibles" : "Escribí acá… (texto o archivo simulado)"}
-            disabled={sending || atLimit}
-          />
-        </div>
+        {!readOnly && (
+          <div style={{ marginBottom: 10 }}>
+            <UnderlineField
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send()}
+              placeholder={atLimit ? "Sin mensajes disponibles" : "Escribí acá… (texto o archivo simulado)"}
+              disabled={sending || atLimit}
+            />
+          </div>
+        )}
         <div style={{ display: "flex", gap: 8 }}>
-          {!atLimit && (
+          {!readOnly && !atLimit && (
             <PrimaryButton full disabled={sending || !input.trim()} onClick={send}>
               Enviar
             </PrimaryButton>
@@ -1611,6 +1630,7 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
   const [ampliado, setAmpliado] = useState(false);
   const [recovery, setRecovery] = useState(null);
   const [estado, setEstado] = useState(request.estado);
+  const [chosenOfferId, setChosenOfferId] = useState(request.chosenOfferId || null);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [aclaracionTexto, setAclaracionTexto] = useState("");
@@ -1628,6 +1648,7 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
       setAmpliado(!!mine.matchAmpliado);
       setRecovery(mine.recovery || null);
       setEstado(mine.estado);
+      setChosenOfferId(mine.chosenOfferId || null);
     }
   }, [request.id]);
 
@@ -1638,6 +1659,10 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
   }, [poll]);
 
   const feedVacio = intereses.length === 0 && ofertas.length === 0;
+  // "cerrado" es el nombre de estado anterior a la migración a
+  // "propuesta_elegida" — un pedido viejo sin migrar se trata igual.
+  const propuestaElegida = estado === "propuesta_elegida" || estado === "cerrado";
+  const chosenOffer = propuestaElegida ? ofertas.find((o) => o.id === chosenOfferId) || null : null;
 
   async function enviarAclaracion() {
     if (!aclaracionTexto.trim()) return;
@@ -1690,10 +1715,12 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
         )}
       </div>
 
-      {feedVacio && estado === "cancelado" ? (
+      {propuestaElegida ? (
+        <ChosenOfferNotice offer={chosenOffer} />
+      ) : feedVacio && estado === "cancelado" ? (
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "safe center", alignItems: "center", textAlign: "center", padding: "0 26px 26px" }}>
           <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>
-            Este pedido fue cancelado. Ya no se están buscando productores para él.
+            Este pedido fue cancelado. Ya no se están buscando profesionales para él.
           </p>
         </div>
       ) : feedVacio && recovery === "aclaracion" ? (
@@ -1744,7 +1771,7 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
           <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>
             {ampliado
               ? "Estamos ampliando la búsqueda a más estilos para encontrarte opciones. Podés cerrar la app; te avisamos acá."
-              : "Estamos seleccionando productores que puedan encajar con lo que querés hacer. Podés cerrar la app; te avisamos cuando alguien quiera conocer mejor tu proyecto o enviarte una propuesta."}
+              : "Estamos seleccionando profesionales que puedan encajar con lo que querés hacer. Podés cerrar la app; te avisamos cuando alguien quiera conocer mejor tu proyecto o enviarte una propuesta."}
           </p>
         </div>
       ) : (
@@ -1878,13 +1905,13 @@ function OfferDetail({ offer, onBack, onChoose, onMessage, choosing, messaging, 
   );
 }
 
-function ChosenScreen({ offer, onBack }) {
+// Se muestra dentro de WaitingScreen (no es una pantalla propia) cuando el
+// pedido tiene una propuesta elegida: todavía no hay reserva ni pago, así
+// que no se llama "confirmado" ni se saca de "en curso".
+function ChosenOfferNotice({ offer }) {
+  if (!offer) return null;
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ padding: "20px 22px 0", minHeight: 20 }}>
-        <TextLink onClick={onBack}>‹ Atrás</TextLink>
-      </div>
-      <div style={{ flex: 1, minHeight: 0, padding: "30px 24px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", justifyContent: "safe center" }}>
+    <div style={{ flex: 1, minHeight: 0, padding: "30px 24px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", justifyContent: "safe center" }}>
       <div style={{ width: 44, height: 44, borderRadius: "50%", background: COLORS.accent, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
         <span style={{ color: "#fff", fontSize: 20, fontWeight: 700 }}>✓</span>
       </div>
@@ -1892,9 +1919,8 @@ function ChosenScreen({ offer, onBack }) {
         Elegiste a {offer.productor}
       </h2>
       <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, maxWidth: 280 }}>
-        Reserva, pago y coordinación de horario van en el próximo prototipo — esta pantalla es un placeholder de dónde continúa el flujo.
+        Pendiente de reserva. El siguiente paso es coordinar horario, reserva y pago con {offer.productor} — todavía no está confirmado, eso llega en el próximo bloque del prototipo.
       </p>
-      </div>
     </div>
   );
 }
@@ -1945,6 +1971,21 @@ function sanitizeContextForClassification(previousContext, previousType, nextCla
   };
 }
 
+// Migración única: los pedidos guardados con el estado anterior "cerrado"
+// (antes de separar "propuesta_elegida" de una futura confirmación real con
+// reserva y pago) pasan a "propuesta_elegida" en el storage compartido. No
+// se pierde ni se reescribe ningún otro dato del pedido.
+async function migrateLegacyClosedRequests() {
+  const all = (await storageGet(REQUESTS_KEY, true)) || [];
+  let changed = false;
+  const migrated = all.map((r) => {
+    if (r.estado !== "cerrado") return r;
+    changed = true;
+    return { ...r, estado: "propuesta_elegida" };
+  });
+  if (changed) await storageSet(REQUESTS_KEY, migrated, true);
+}
+
 /* ---------------- raíz ---------------- */
 
 export default function App() {
@@ -1956,7 +1997,6 @@ export default function App() {
   const [openInteres, setOpenInteres] = useState(null);
   const [selectedOffer, setSelectedOffer] = useState(null);
   const [conversationReturnOffer, setConversationReturnOffer] = useState(null);
-  const [chosenOffer, setChosenOffer] = useState(null);
   const [interpreting, setInterpreting] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState(false);
@@ -1981,6 +2021,7 @@ export default function App() {
       const p = await storageGet(PROFILE_KEY, false);
       setProfile(p);
     })();
+    migrateLegacyClosedRequests();
     return () => timers.current.forEach(clearTimeout);
   }, []);
 
@@ -2245,22 +2286,25 @@ export default function App() {
     const all = (await storageGet(REQUESTS_KEY, true)) || [];
     let changed = false;
     const updated = all.map((r) => {
-      if (r.id !== request.id || r.estado === "cerrado" || r.estado === "cancelado") return r;
+      if (r.id !== request.id || r.estado === "propuesta_elegida" || r.estado === "cerrado" || r.estado === "cancelado") return r;
       changed = true;
       return { ...r, recovery: null, curados: [], ofertas: [...r.ofertas, oferta], estado: "con_ofertas" };
     });
     return changed && await storageSet(REQUESTS_KEY, updated, true);
   }
 
+  // Elegir una propuesta no confirma la contratación todavía: falta reserva
+  // y pago, que no existen en este prototipo. El pedido sigue "en curso" con
+  // estado "propuesta_elegida" — no se lo trata como cerrado/finalizado.
   async function handleChoose(offer) {
     setChoosing(true);
     setChooseError(null);
     const all = (await storageGet(REQUESTS_KEY, true)) || [];
     let changed = false;
     const updated = all.map((r) => {
-      if (r.id !== request.id || r.estado === "cerrado" || r.estado === "cancelado") return r;
+      if (r.id !== request.id || r.estado === "propuesta_elegida" || r.estado === "cerrado" || r.estado === "cancelado") return r;
       changed = true;
-      return { ...r, estado: "cerrado", chosenOfferId: offer.id };
+      return { ...r, estado: "propuesta_elegida", chosenOfferId: offer.id };
     });
     const ok = changed && await storageSet(REQUESTS_KEY, updated, true);
     setChoosing(false);
@@ -2268,9 +2312,14 @@ export default function App() {
       setChooseError("No pudimos guardar tu elección. Probá de nuevo.");
       return;
     }
+    // Los timers de simulación de productores ya no tienen sentido para este
+    // pedido (no se van a generar más ofertas ni intereses nuevos).
     timers.current.forEach(clearTimeout);
     timers.current = [];
-    setChosenOffer(offer);
+    // No hace falta un estado aparte: `request` sigue seteado, así que al
+    // cerrar OfferDetail cae de nuevo en WaitingScreen, que ya sabe mostrar
+    // el aviso de "propuesta elegida" según el estado recién guardado.
+    setSelectedOffer(null);
   }
 
   async function handleMessageOffer(offer) {
@@ -2280,7 +2329,11 @@ export default function App() {
     let conversation = null;
     let changed = false;
     const updated = all.map((r) => {
-      if (r.id !== request.id || r.estado === "cerrado" || r.estado === "cancelado") return r;
+      // A diferencia de elegir una propuesta o generar una oferta nueva,
+      // mandar un mensaje sigue permitido con "propuesta_elegida" — todavía
+      // no hay contratación confirmada, así que el límite de 4 mensajes
+      // sigue rigiendo en vez de bloquear el chat directamente.
+      if (r.id !== request.id || r.estado === "cancelado") return r;
       const existing = r.intereses.find((it) => it.productor === offer.productor);
       if (existing) {
         conversation = { ...existing, formalOfferExists: true };
@@ -2360,11 +2413,9 @@ export default function App() {
   function handleOpenExistingRequest(requestObj) {
     setClassification(null);
     setContext(null);
-    if (requestObj.estado === "cerrado") {
-      const offer = (requestObj.ofertas || []).find((o) => o.id === requestObj.chosenOfferId) || null;
-      setChosenOffer(offer);
-      return;
-    }
+    // "propuesta_elegida" (y su antecesor "cerrado") se abre igual que
+    // cualquier otro pedido activo: WaitingScreen decide qué mostrar según
+    // el estado real, sin una pantalla aparte desconectada de la pestaña.
     setRequest(requestObj);
   }
 
@@ -2423,15 +2474,13 @@ export default function App() {
   // interna, con su propia flecha de volver, sin barra). Cambiar de pestaña
   // nunca toca classification/request/openInteres/etc., así que la pestaña
   // activa persiste sola mientras se navega dentro de un pedido o chat.
-  const inFlowMode = startedCreating || !!request || !!openInteres || !!selectedOffer || !!chosenOffer || showHelp || showPrivacy || editingProfileName;
+  const inFlowMode = startedCreating || !!request || !!openInteres || !!selectedOffer || showHelp || showPrivacy || editingProfileName;
 
   let body = null;
   if (profile === undefined) {
     body = null;
   } else if (profile === null) {
     body = <Gate onDone={handleGateDone} />;
-  } else if (chosenOffer) {
-    body = <ChosenScreen offer={chosenOffer} onBack={() => setChosenOffer(null)} />;
   } else if (selectedOffer) {
     body = <OfferDetail offer={selectedOffer} choosing={choosing} messaging={messaging} chooseError={chooseError} onBack={() => { setSelectedOffer(null); setChooseError(null); }} onMessage={() => handleMessageOffer(selectedOffer)} onChoose={() => handleChoose(selectedOffer)} />;
   } else if (openInteres) {
@@ -2443,6 +2492,7 @@ export default function App() {
         onBack={closeConversation}
         onOfferGenerated={() => {}}
         returnLabel={conversationOpenedFromMensajes ? "Volver a mensajes" : null}
+        readOnly={request?.estado === "cancelado"}
       />
     );
   } else if (request && !editingLiveRequestId) {
