@@ -27,6 +27,17 @@ Con el visualizador ya funcionando, se recorrieron de punta a punta los flujos d
 
 Herramientas usadas sólo para esta verificación (Node + Playwright/Chromium, instalados en una carpeta aparte fuera del repo) no quedaron como dependencia del proyecto ni se commitearon — es tooling de sesión, no parte de la app.
 
+### Cierre de la auditoría (misma sesión)
+
+Con la lógica ya auditada, se cerró la auditoría con cuatro verificaciones puntuales:
+
+1. **Edición de pedido, verificada paso a paso en el navegador.** El test automático genérico de la sesión anterior daba 4 checks fallidos al repetir el flujo de edición en un bucle genérico — se confirmó que era una falla del propio script de prueba (una carrera al reintentar clics ya hechos), no de la app: un recorrido lineal, manual, paso por paso, confirmó que modalidad, ubicación/horario, maqueta/referencia y géneros vuelven a mostrarse para revisión, y que "Actualizar pedido" vuelve correctamente a "Tu proyecto ya está en movimiento" (12/12 pasos verificados, sin errores de consola).
+2. **Recuperación de punta a punta**, forzando cero productores por incompatibilidad de género (no de ubicación) para poder confirmar el resultado real de la búsqueda: se publicó un pedido con género "Electrónica" en una zona compatible con un productor que no tiene ese género, se esperó a que dispare la recuperación, se envió una aclaración mencionando "Duki" (detecta urbano/trap), y se confirmó en el storage guardado que el pedido conserva "electronica" y suma "urbano"/"trap", que el estado de recuperación se limpia, y que con los géneros combinados aparece un interés real que antes no aparecía (el productor pasó a ser compatible).
+3. **Se consolidó `context.md`** para sacar contradicciones con decisiones ya reemplazadas: "Toda CABA" ya no es una opción (se había sacado, pero seguía mencionada en la sección de "Dirección de experiencia"), "Me da igual" ya no es el label vigente (hoy es "Me adapto" para franja y "Puedo de las dos formas" para modalidad), y una referencia residual a `colab-artista_2.jsx` se corrigió a `app/ColabApp.jsx`. Sin cambios de decisiones, sólo se alineó el texto con lo que ya estaba vigente en el código.
+4. **Pasada visual** de las pantallas principales con capturas reales (viewport mobile, 400×844): se encontró y corrigió un bug de layout real — a todo contenedor scrolleable con `flex: 1` le faltaba `min-height: 0`, así que cuando el contenido era más alto que lo disponible (ej. la lista completa de "elegir zona", o un feed con varias ofertas e intereses) el contenido crecía por fuera del viewport en vez de scrollear, tapando el "‹ Atrás" y el título de arriba. Se corrigió en los 6 lugares con el mismo patrón (commit `2a64148`), verificado con capturas antes/después y con contenido de sobra para forzar el caso. También se corrigió que el resumen del intérprete de respaldo partía palabras al medio al truncar a 110 caracteres (ej. "termi…") — ahora corta en el último espacio. El resto de las pantallas revisadas (gate, inicio, referencia, precio de la oferta, chat) no mostró problemas de jerarquía o navegación.
+
+Sin cambios de lógica de negocio ni de decisiones de producto en este cierre — sólo correcciones de layout/copy y consolidación de documentación.
+
 ## Estado del prototipo del artista
 
 El Build 5 de `app/ColabApp.jsx` suma edición de un pedido ya publicado sobre la lógica auditada del Build 4:
