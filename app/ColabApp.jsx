@@ -5,7 +5,12 @@ import { COLORS } from "./theme.js";
 import BottomNav from "./BottomNav.jsx";
 import { HomeScreen, OrdersScreen, MessagesScreen, ProfileScreen, HelpScreen, PrivacyScreen, EditNameScreen } from "./RootScreens.jsx";
 import { PrimaryButton, SecondaryButton, TextLink, Label, UnderlineField, underlineInputStyle, Screen, ProducerPhoto } from "./ui/pieces.jsx";
-import { PROFILE_KEY, REQUESTS_KEY, storageGet, storageSet } from "./lib/storage.js";
+import {
+  PROFILE_KEY, storageGet, storageSet,
+  getAllRequests, getRequestById, updateRequestById, saveRequests,
+  migrateLegacyClosedRequests,
+} from "./lib/storage.js";
+import { esPropuestaElegida, esCancelado } from "./domain/estado.js";
 
 /* ============================================================
    COLAB — prototipo navegable del flujo del artista
@@ -1260,14 +1265,12 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
   // Cada escritura parte del estado persistido más reciente. Así dos callbacks
   // nunca pisan mensajes anteriores y el límite se aplica a ambos participantes.
   async function appendMessage(message) {
-    const all = (await storageGet(REQUESTS_KEY, true)) || [];
     let nextMessages = null;
-    const updated = all.map((r) => {
-      if (r.id !== request.id) return r;
+    const { ok } = await updateRequestById(request.id, (r) => {
       // "propuesta_elegida" (o su antecesor "cerrado") todavía permite escribir
       // hasta el límite de 4 mensajes — elegir una propuesta no es lo mismo que
       // confirmar la contratación. Sólo "cancelado" bloquea de verdad.
-      if (r.estado === "cancelado") return r;
+      if (esCancelado(r.estado)) return null;
       const intereses = r.intereses.map((it) => {
         if (it.id !== interes.id) return it;
         const currentMessages = it.mensajes?.length
@@ -1281,10 +1284,9 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
         nextMessages = [...currentMessages, message];
         return { ...it, mensajes: nextMessages };
       });
+      if (nextMessages === null) return null;
       return { ...r, intereses };
     });
-    if (!nextMessages) return null;
-    const ok = await storageSet(REQUESTS_KEY, updated, true);
     return ok ? nextMessages : null;
   }
 
@@ -1339,16 +1341,12 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
     setRequestingOffer(true);
     setConversationError(null);
     const oferta = buildOfferFrom(interes);
-    const all = (await storageGet(REQUESTS_KEY, true)) || [];
-    let changed = false;
-    const updated = all.map((r) => {
-      if (r.id !== request.id) return r;
+    const { changed, ok } = await updateRequestById(request.id, (r) => {
       // Una oferta nueva de otro productor no debe pisar una propuesta ya
       // elegida ni reabrir un pedido cancelado.
-      if (r.estado === "propuesta_elegida" || r.estado === "cerrado" || r.estado === "cancelado") return r;
+      if (esPropuestaElegida(r.estado) || esCancelado(r.estado)) return null;
       const intereses = r.intereses.map((it) => (it.id === interes.id ? { ...it, resuelto: true } : it));
       const alreadyOffered = r.ofertas.some((item) => item.productor === interes.productor);
-      changed = true;
       return { ...r, intereses, ofertas: alreadyOffered ? r.ofertas : [...r.ofertas, oferta], estado: "con_ofertas" };
     });
     if (!changed) {
@@ -1358,7 +1356,6 @@ function ConversationScreen({ request, interes, onBack, onOfferGenerated, formal
       setRequestingOffer(false);
       return;
     }
-    const ok = await storageSet(REQUESTS_KEY, updated, true);
     setRequestingOffer(false);
     if (!ok) {
       setConversationError("No pudimos generar la propuesta. Probá de nuevo.");
@@ -1465,8 +1462,7 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
   const [actionError, setActionError] = useState(null);
 
   const poll = useCallback(async () => {
-    const all = (await storageGet(REQUESTS_KEY, true)) || [];
-    const mine = all.find((r) => r.id === request.id);
+    const mine = await getRequestById(request.id);
     if (mine) {
       setIntereses(mine.intereses || []);
       setOfertas(mine.ofertas || []);
@@ -1485,9 +1481,7 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
   }, [poll]);
 
   const feedVacio = intereses.length === 0 && ofertas.length === 0;
-  // "cerrado" es el nombre de estado anterior a la migración a
-  // "propuesta_elegida" — un pedido viejo sin migrar se trata igual.
-  const propuestaElegida = estado === "propuesta_elegida" || estado === "cerrado";
+  const propuestaElegida = esPropuestaElegida(estado);
   const chosenOffer = propuestaElegida ? ofertas.find((o) => o.id === chosenOfferId) || null : null;
 
   async function enviarAclaracion() {
@@ -1797,21 +1791,6 @@ function sanitizeContextForClassification(previousContext, previousType, nextCla
   };
 }
 
-// Migración única: los pedidos guardados con el estado anterior "cerrado"
-// (antes de separar "propuesta_elegida" de una futura confirmación real con
-// reserva y pago) pasan a "propuesta_elegida" en el storage compartido. No
-// se pierde ni se reescribe ningún otro dato del pedido.
-async function migrateLegacyClosedRequests() {
-  const all = (await storageGet(REQUESTS_KEY, true)) || [];
-  let changed = false;
-  const migrated = all.map((r) => {
-    if (r.estado !== "cerrado") return r;
-    changed = true;
-    return { ...r, estado: "propuesta_elegida" };
-  });
-  if (changed) await storageSet(REQUESTS_KEY, migrated, true);
-}
-
 /* ---------------- raíz ---------------- */
 
 export default function App() {
@@ -1906,9 +1885,8 @@ export default function App() {
   }
 
   async function isRequestStillOpen(reqId) {
-    const all = (await storageGet(REQUESTS_KEY, true)) || [];
-    const mine = all.find((r) => r.id === reqId);
-    return mine && mine.estado !== "cerrado" && mine.estado !== "cancelado";
+    const mine = await getRequestById(reqId);
+    return mine && mine.estado !== "cerrado" && !esCancelado(mine.estado);
   }
 
   // Compartido entre publicar (pedido nuevo) y actualizar (pedido ya publicado
@@ -1968,8 +1946,8 @@ export default function App() {
       ofertas: [],
       chosenOfferId: null,
     };
-    const all = (await storageGet(REQUESTS_KEY, true)) || [];
-    const ok = await storageSet(REQUESTS_KEY, [newRequest, ...all], true);
+    const all = await getAllRequests();
+    const ok = await saveRequests([newRequest, ...all]);
     setPublishing(false);
     if (!ok) {
       setPublishError(true);
@@ -2009,36 +1987,29 @@ export default function App() {
     setPublishing(true);
     setPublishError(false);
     const { generos, matchingContext, productores, ampliado, tieneReferencia } = buildMatchResult();
-    const all = (await storageGet(REQUESTS_KEY, true)) || [];
-    let updatedRequest = null;
-    const updated = all.map((r) => {
-      if (r.id !== editingLiveRequestId) return r;
-      updatedRequest = {
-        ...r,
-        tipo: classification.tipo,
-        textoOriginal: classification.originalText,
-        resumen: classification.summary,
-        modalidad: matchingContext.modalidad,
-        ubicacion: matchingContext.ubicacion,
-        coordinates: matchingContext.coordinates,
-        franja: matchingContext.franja,
-        dateText: classification.dateText || null,
-        timeText: classification.timeText || null,
-        estado: "esperando",
-        matchAmpliado: ampliado,
-        tieneReferencia,
-        generos,
-        classification,
-        context,
-        recovery: null,
-        curados: [],
-        intereses: [],
-        ofertas: [],
-        chosenOfferId: null,
-      };
-      return updatedRequest;
-    });
-    const ok = updatedRequest && (await storageSet(REQUESTS_KEY, updated, true));
+    const { ok, request: updatedRequest } = await updateRequestById(editingLiveRequestId, (r) => ({
+      ...r,
+      tipo: classification.tipo,
+      textoOriginal: classification.originalText,
+      resumen: classification.summary,
+      modalidad: matchingContext.modalidad,
+      ubicacion: matchingContext.ubicacion,
+      coordinates: matchingContext.coordinates,
+      franja: matchingContext.franja,
+      dateText: classification.dateText || null,
+      timeText: classification.timeText || null,
+      estado: "esperando",
+      matchAmpliado: ampliado,
+      tieneReferencia,
+      generos,
+      classification,
+      context,
+      recovery: null,
+      curados: [],
+      intereses: [],
+      ofertas: [],
+      chosenOfferId: null,
+    }));
     setPublishing(false);
     if (!ok) {
       setPublishError(true);
@@ -2056,12 +2027,10 @@ export default function App() {
       const t = setTimeout(async () => {
         if (!(await isRequestStillOpen(req.id))) return;
         const path = pickProducerPath();
-        const all = (await storageGet(REQUESTS_KEY, true)) || [];
         if (path === "ahora_no") return;
         if (path === "oferta_directa") {
           const oferta = buildOfferFrom(p);
-          const updated = all.map((r) => (r.id === req.id ? { ...r, ofertas: [...r.ofertas, oferta], estado: "con_ofertas" } : r));
-          await storageSet(REQUESTS_KEY, updated, true);
+          await updateRequestById(req.id, (r) => ({ ...r, ofertas: [...r.ofertas, oferta], estado: "con_ofertas" }));
         } else {
           const createdAt = new Date().toISOString();
           const interes = {
@@ -2071,8 +2040,7 @@ export default function App() {
             resuelto: false,
             createdAt,
           };
-          const updated = all.map((r) => (r.id === req.id ? { ...r, intereses: [...r.intereses, interes] } : r));
-          await storageSet(REQUESTS_KEY, updated, true);
+          await updateRequestById(req.id, (r) => ({ ...r, intereses: [...r.intereses, interes] }));
         }
       }, 3000 + i * 4000);
       timers.current.push(t);
@@ -2081,42 +2049,37 @@ export default function App() {
     const recoveryDelay = 3000 + productores.length * 4000 + 2500;
     const rt = setTimeout(async () => {
       if (!(await isRequestStillOpen(req.id))) return;
-      const all = (await storageGet(REQUESTS_KEY, true)) || [];
-      const mine = all.find((r) => r.id === req.id);
+      const mine = await getRequestById(req.id);
       if (!mine || mine.intereses.length > 0 || mine.ofertas.length > 0) return;
       const curados = mine.tieneReferencia ? getCuratedAlternatives(mine) : [];
       const recoveryTipo = mine.tieneReferencia && curados.length > 0 ? "curada" : "aclaracion";
-      const updated = all.map((r) => (r.id === req.id ? { ...r, recovery: recoveryTipo, curados } : r));
-      await storageSet(REQUESTS_KEY, updated, true);
+      await updateRequestById(req.id, (r) => ({ ...r, recovery: recoveryTipo, curados }));
     }, recoveryDelay);
     timers.current.push(rt);
   }
 
   async function handleAclaracion(textoAclaracion) {
-    const all = (await storageGet(REQUESTS_KEY, true)) || [];
-    const mine = all.find((r) => r.id === request.id);
-    if (!mine) return;
+    let matchResult = null;
     // La aclaración suma información, no la reemplaza: se combinan los géneros ya
     // confirmados del pedido original con lo nuevo que se detecte en el texto.
-    const generos = Array.from(new Set([...(mine.generos || []), ...detectGeneros(textoAclaracion)]));
-    const { productores, ampliado } = pickProducers(mine.tipo, generos, mine);
-    const updated = all.map((r) => (r.id === request.id ? { ...r, recovery: null, curados: [], matchAmpliado: ampliado, tieneReferencia: true, generos } : r));
-    const ok = await storageSet(REQUESTS_KEY, updated, true);
-    if (!ok) return false;
-    scheduleSimulatedProducers({ id: request.id }, productores);
+    const { changed, ok } = await updateRequestById(request.id, (r) => {
+      const generos = Array.from(new Set([...(r.generos || []), ...detectGeneros(textoAclaracion)]));
+      const { productores, ampliado } = pickProducers(r.tipo, generos, r);
+      matchResult = { productores, ampliado };
+      return { ...r, recovery: null, curados: [], matchAmpliado: ampliado, tieneReferencia: true, generos };
+    });
+    if (!changed || !ok) return false;
+    scheduleSimulatedProducers({ id: request.id }, matchResult.productores);
     return true;
   }
 
   async function handleSolicitarCurado(productorData) {
     const oferta = buildOfferFrom(productorData);
-    const all = (await storageGet(REQUESTS_KEY, true)) || [];
-    let changed = false;
-    const updated = all.map((r) => {
-      if (r.id !== request.id || r.estado === "propuesta_elegida" || r.estado === "cerrado" || r.estado === "cancelado") return r;
-      changed = true;
+    const { changed, ok } = await updateRequestById(request.id, (r) => {
+      if (esPropuestaElegida(r.estado) || esCancelado(r.estado)) return null;
       return { ...r, recovery: null, curados: [], ofertas: [...r.ofertas, oferta], estado: "con_ofertas" };
     });
-    return changed && await storageSet(REQUESTS_KEY, updated, true);
+    return changed && ok;
   }
 
   // Elegir una propuesta no confirma la contratación todavía: falta reserva
@@ -2125,16 +2088,12 @@ export default function App() {
   async function handleChoose(offer) {
     setChoosing(true);
     setChooseError(null);
-    const all = (await storageGet(REQUESTS_KEY, true)) || [];
-    let changed = false;
-    const updated = all.map((r) => {
-      if (r.id !== request.id || r.estado === "propuesta_elegida" || r.estado === "cerrado" || r.estado === "cancelado") return r;
-      changed = true;
+    const { changed, ok } = await updateRequestById(request.id, (r) => {
+      if (esPropuestaElegida(r.estado) || esCancelado(r.estado)) return null;
       return { ...r, estado: "propuesta_elegida", chosenOfferId: offer.id };
     });
-    const ok = changed && await storageSet(REQUESTS_KEY, updated, true);
     setChoosing(false);
-    if (!ok) {
+    if (!(changed && ok)) {
       setChooseError("No pudimos guardar tu elección. Probá de nuevo.");
       return;
     }
@@ -2151,15 +2110,13 @@ export default function App() {
   async function handleMessageOffer(offer) {
     setMessaging(true);
     setChooseError(null);
-    const all = (await storageGet(REQUESTS_KEY, true)) || [];
     let conversation = null;
-    let changed = false;
-    const updated = all.map((r) => {
+    const { changed, ok } = await updateRequestById(request.id, (r) => {
       // A diferencia de elegir una propuesta o generar una oferta nueva,
       // mandar un mensaje sigue permitido con "propuesta_elegida" — todavía
       // no hay contratación confirmada, así que el límite de 4 mensajes
       // sigue rigiendo en vez de bloquear el chat directamente.
-      if (r.id !== request.id || r.estado === "cancelado") return r;
+      if (esCancelado(r.estado)) return null;
       const existing = r.intereses.find((it) => it.productor === offer.productor);
       if (existing) {
         conversation = { ...existing, formalOfferExists: true };
@@ -2176,12 +2133,11 @@ export default function App() {
         formalOfferExists: true,
         createdAt,
       };
-      changed = true;
       return { ...r, intereses: [...r.intereses, conversation] };
     });
-    const ok = !changed || await storageSet(REQUESTS_KEY, updated, true);
+    const okOverall = !changed || ok;
     setMessaging(false);
-    if (!ok || !conversation) {
+    if (!okOverall || !conversation) {
       setChooseError("No pudimos abrir la conversación. Probá de nuevo.");
       return;
     }
@@ -2208,15 +2164,8 @@ export default function App() {
   async function handleCancel() {
     const cancelledId = request ? request.id : null;
     if (!cancelledId) return false;
-    const all = (await storageGet(REQUESTS_KEY, true)) || [];
-    let changed = false;
-    const updated = all.map((r) => {
-      if (r.id !== cancelledId) return r;
-      changed = true;
-      return { ...r, estado: "cancelado" };
-    });
-    const ok = changed && await storageSet(REQUESTS_KEY, updated, true);
-    if (!ok) return false;
+    const { changed, ok } = await updateRequestById(cancelledId, (r) => ({ ...r, estado: "cancelado" }));
+    if (!(changed && ok)) return false;
     timers.current.forEach(clearTimeout);
     timers.current = [];
     setRequest(null);
@@ -2280,9 +2229,9 @@ export default function App() {
     // en este prototipo). Sin esta migración, cambiar el nombre artístico
     // "perdería" el historial ya guardado con el nombre anterior.
     if (newName !== oldName) {
-      const all = (await storageGet(REQUESTS_KEY, true)) || [];
+      const all = await getAllRequests();
       const migrated = all.map((r) => (r.artistName === oldName ? { ...r, artistName: newName } : r));
-      await storageSet(REQUESTS_KEY, migrated, true);
+      await saveRequests(migrated);
     }
     setProfile(updated);
     setEditingProfileName(false);
@@ -2318,7 +2267,7 @@ export default function App() {
         onBack={closeConversation}
         onOfferGenerated={() => {}}
         returnLabel={conversationOpenedFromMensajes ? "Volver a mensajes" : null}
-        readOnly={request?.estado === "cancelado"}
+        readOnly={esCancelado(request?.estado)}
       />
     );
   } else if (request && !editingLiveRequestId) {

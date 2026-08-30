@@ -1,41 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
 import { Screen, Label, TextLink, PrimaryButton, UnderlineField, ProducerPhoto } from "./ui/pieces.jsx";
-import { storageGet, REQUESTS_KEY } from "./lib/storage.js";
+import { getAllRequests } from "./lib/storage.js";
+import { ESTADO_LABELS, esPropuestaElegida, esActivo } from "./domain/estado.js";
 
 /* ============================================================
    Pantallas raíz de la navegación (Inicio / Pedidos / Mensajes / Perfil)
    más las pantallas internas de Perfil (Ayuda, Privacidad, Editar nombre).
-   Reutilizan las piezas de app/ui/ y app/lib/storage.js — nunca importan
-   nada del componente raíz (ColabApp.jsx), así se elimina el ciclo de
-   imports que existía entre los dos módulos. No duplican lógica de
-   matching, chat ni publicación. Cada pantalla lee sus propios datos de
-   localStorage con el mismo patrón de polling que ya usa WaitingScreen,
-   filtrados por artista.
+   Reutilizan las piezas de app/ui/, app/lib/storage.js y app/domain/estado.js
+   — nunca importan nada del componente raíz (ColabApp.jsx). No duplican
+   lógica de matching, chat ni publicación. Cada pantalla lee sus propios
+   datos de localStorage con el mismo patrón de polling que ya usa
+   WaitingScreen, filtrados por artista.
    ============================================================ */
-
-// El ciclo de vida real de este prototipo es esperando -> con_ofertas ->
-// propuesta_elegida -> cancelado. "reservado", "en_curso" y "finalizado"
-// quedan documentados en context.md pero no existen todavía porque reserva
-// y pago no están implementados. "cerrado" es el nombre anterior de
-// "propuesta_elegida" — un pedido guardado con ese estado se trata igual
-// (ver migración en ColabApp.jsx) aunque no haya llegado a migrarse todavía.
-const ESTADO_LABELS = {
-  esperando: "Esperando profesionales",
-  con_ofertas: "Con propuestas",
-  propuesta_elegida: "Propuesta elegida",
-  cerrado: "Propuesta elegida",
-  cancelado: "Cancelado",
-};
-
-function esPropuestaElegida(estado) {
-  return estado === "propuesta_elegida" || estado === "cerrado";
-}
-// Todo lo que no esté cancelado sigue "en curso" en este prototipo — no hay
-// todavía un estado "finalizado" real que mover a "Anteriores".
-function esActivo(estado) {
-  return estado !== "cancelado";
-}
 
 const heading1 = { fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 24, color: COLORS.text, margin: "0 0 4px", lineHeight: 1.25 };
 const mutedSmall = { fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 13, color: COLORS.muted, lineHeight: 1.5 };
@@ -45,7 +22,7 @@ function useMyRequests(artistName) {
   useEffect(() => {
     let cancelled = false;
     async function poll() {
-      const all = (await storageGet(REQUESTS_KEY, true)) || [];
+      const all = await getAllRequests();
       if (cancelled) return;
       const mine = all
         .filter((r) => r.artistName === artistName)
