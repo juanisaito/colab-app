@@ -2,6 +2,29 @@
 
 Actualizado: 29 de agosto de 2026.
 
+## Navegación por pestañas (sesión del 29 de agosto de 2026 con Claude Code)
+
+El prototipo del artista dejó de ser un flujo 100% lineal: ahora es una app navegable con una **barra inferior fija** de cuatro pestañas — Inicio, Pedidos, Mensajes, Perfil — construida sobre la misma lógica de negocio ya auditada (matching, chat con límite de 4 mensajes, edición, recuperación). No se tocó ninguna decisión de producto ya cerrada; esto es exclusivamente arquitectura de navegación.
+
+**Archivos nuevos:**
+- `app/theme.js` — `COLORS`, en un archivo sin dependencias propias. Tuvo que separarse de `ColabApp.jsx` porque `ColabApp.jsx` y `RootScreens.jsx` se importan mutuamente (`RootScreens` usa piezas visuales de `ColabApp`; `ColabApp` arma la navegación con las pantallas de `RootScreens`), y `COLORS` se usaba en el nivel superior de ambos módulos — ese ciclo con un valor usado top-level dispara un `ReferenceError: Cannot access 'COLORS' before initialization` al cargar. El resto de las piezas compartidas (`Screen`, `PrimaryButton`, `TextLink`, `Label`, `UnderlineField`, `ProducerPhoto`, `storageGet`/`storageSet`, `REQUESTS_KEY`/`PROFILE_KEY`, etc.) no tuvo ese problema porque solo se usan dentro de cuerpos de función, no en el nivel superior del módulo — se exportaron desde `ColabApp.jsx` tal cual estaban, sin moverlas.
+- `app/BottomNav.jsx` — la barra inferior y sus 4 íconos (SVG en línea, sin librería).
+- `app/RootScreens.jsx` — `HomeScreen`, `OrdersScreen`, `MessagesScreen`, `ProfileScreen`, `HelpScreen`, `PrivacyScreen`, `EditNameScreen`. Cada pantalla lee sus propios pedidos de `localStorage` con el mismo patrón de polling que ya usaba `WaitingScreen`, filtrados por `artistName === profile.name` (antes no existía ningún filtro por artista, porque nunca había una pantalla que listara "todos mis pedidos").
+
+**Cómo se decide pestañas vs. flujo interno**, en `App` (`ColabApp.jsx`): un solo booleano, `inFlowMode`, es `true` si hay una creación/edición en curso, un pedido abierto, una conversación, una oferta, "elegiste a X", Ayuda, Privacidad o edición de perfil — en ese caso se oculta la barra y se muestra la pantalla interna correspondiente con su propio "‹ Atrás". Si no, se muestra la pestaña activa (`activeTab`) con la barra visible. Cambiar de pestaña nunca toca `request`/`classification`/etc., así que la pestaña activa persiste sola mientras se navega — no hizo falta llevar un registro de "desde dónde se abrió cada pantalla".
+
+**Bugs reales encontrados y corregidos durante esta implementación** (no eran bugs antes porque no existía forma de "volver" desde esas pantallas):
+1. `handlePublish`/`handleUpdateRequest` nunca limpiaban `classification`/`context` al terminar. Con el nuevo botón "‹ Atrás" en `WaitingScreen`, volver desde un pedido recién publicado mostraba de nuevo el resumen viejo en vez de la pestaña Pedidos. Se agregó `handleCloseRequestDetail` que limpia todo correctamente.
+2. Cambiar el nombre artístico (Perfil → Editar) no actualizaba el `artistName` de los pedidos ya guardados — como Pedidos/Mensajes/Inicio filtran por ese campo (no hay un id de usuario en este prototipo), renombrarse "perdía" el historial. Ahora `handleSaveProfileName` migra `artistName` en todos los pedidos existentes al guardar el nuevo nombre.
+3. Un pedido cancelado con el feed vacío seguía mostrando "Tu proyecto ya está en movimiento" y "buscando productores", que ya no es cierto. Ahora muestra un texto acorde ("Este pedido fue cancelado…").
+
+**Qué es real y qué sigue simulado:**
+- **Real**: los pedidos, conversaciones, ofertas y estados que se listan en Pedidos/Mensajes/Inicio salen directamente de `localStorage`, no hay datos inventados. Editar, cancelar, publicar y el chat existente funcionan igual que antes, ahora alcanzables desde la navegación.
+- **Simulado, sin persistencia**: "Tengo un problema con un pedido" y "Contactar a COLAB" en Ayuda no guardan nada en ningún lado — muestran una confirmación local y listo. "Privacidad y términos" es un texto fijo que dice explícitamente que la política todavía no está definida (consistente con lo que ya marcaban las "Decisiones abiertas" de este documento). El punto azul de "mensaje pendiente" en Mensajes es la única señal de estado que el modelo actual sostiene con datos reales (`!resuelto` + último mensaje del productor) — no hay leído/no leído real.
+- **Cerrar sesión** borra sólo el perfil local (`colab-preview-profile-v3`); nunca toca `colab-preview-requests-v3`, así que el historial de pedidos sigue estando ahí para cualquiera que vuelva a entrar con el mismo nombre artístico.
+
+Probado con Playwright (cuenta nueva sin pedidos, pedido activo, pedido con conversación, pedido con propuesta, pedido cerrado, pedido cancelado, cerrar sesión y volver a entrar, advertencia al descartar una creación en curso) y con la batería de lógica/flujo existente de la auditoría anterior, sin regresiones.
+
 ## Organización del repo (sesión del 29 de agosto de 2026 con Claude Code)
 
 A partir de esta sesión, `/Users/saito/Desktop/colab app/` es la carpeta única del proyecto y tiene control de versiones real (`git`). Antes de esto había copias sueltas sin historial: `colabapp v5.jsx` acá, `colab-artista_1.jsx` a `colab-artista_5.jsx` y `colabapp v4` en Descargas, y una copia aparte del visualizador (`colab-preview/`, generada con Codex/OpenAI) desactualizada en Build 4. Esas copias de Descargas quedan sin tocar como respaldo, pero **el archivo fuente único de acá en más es `app/ColabApp.jsx`** — ya no existe un `.jsx` suelto en la raíz ni un `context vN.md` con número de versión; el historial de versiones lo lleva git.
