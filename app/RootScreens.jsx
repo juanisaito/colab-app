@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import {
-  Screen, Label, TextLink, PrimaryButton, UnderlineField, ProducerPhoto,
-  storageGet, REQUESTS_KEY,
-} from "./ColabApp.jsx";
+import { Screen, Label, TextLink, PrimaryButton, UnderlineField, ProducerPhoto } from "./ui/pieces.jsx";
+import { storageGet, REQUESTS_KEY } from "./lib/storage.js";
 
 /* ============================================================
    Pantallas raíz de la navegación (Inicio / Pedidos / Mensajes / Perfil)
    más las pantallas internas de Perfil (Ayuda, Privacidad, Editar nombre).
-   Reutilizan las piezas visuales y de storage de ColabApp.jsx — no
-   duplican lógica de matching, chat ni publicación. Cada pantalla lee sus
-   propios datos de localStorage con el mismo patrón de polling que ya usa
-   WaitingScreen, filtrados por artista.
+   Reutilizan las piezas de app/ui/ y app/lib/storage.js — nunca importan
+   nada del componente raíz (ColabApp.jsx), así se elimina el ciclo de
+   imports que existía entre los dos módulos. No duplican lógica de
+   matching, chat ni publicación. Cada pantalla lee sus propios datos de
+   localStorage con el mismo patrón de polling que ya usa WaitingScreen,
+   filtrados por artista.
    ============================================================ */
 
 // El ciclo de vida real de este prototipo es esperando -> con_ofertas ->
