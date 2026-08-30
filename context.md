@@ -1,6 +1,21 @@
 # COLAB — contexto y roadmap
 
-Actualizado: 29 de agosto de 2026.
+Actualizado: 30 de agosto de 2026.
+
+## Refactorización técnica: eliminar el ciclo de imports y extraer dominio (30 de agosto de 2026)
+
+Antes de seguir agregando funcionalidades, se hizo una refactorización puramente técnica del prototipo del artista — sin cambios de diseño, textos, navegación ni reglas de producto. `app/ColabApp.jsx` pasó de 2632 a 1860 líneas; `app/RootScreens.jsx` de 495 a 471. El resto del código se movió a módulos nuevos, en tres commits revisables:
+
+- **`app/ui/pieces.jsx`**: `Screen`, `PrimaryButton`, `SecondaryButton`, `TextLink`, `Label`, `UnderlineField`, `ProducerPhoto` — las piezas visuales que `ColabApp.jsx` y `RootScreens.jsx` necesitaban de las dos direcciones. Esto elimina el ciclo de imports que documentaba la sección "Navegación por pestañas" más abajo: ahora `ColabApp.jsx` importa pantallas de `RootScreens.jsx` en una única dirección, y `RootScreens.jsx` no importa nada del componente raíz.
+- **`app/lib/storage.js`**: `PROFILE_KEY`, `REQUESTS_KEY`, `storageGet`, `storageSet` (sin cambios de claves ni formato), más helpers nuevos —`getAllRequests`, `getRequestById`, `updateRequestById`, `saveRequests`, `migrateLegacyClosedRequests`— que reemplazan el patrón repetido "leer toda la colección, mapear buscando el id, volver a guardar" que aparecía en cada acción (chat, ofertas, elegir propuesta, cancelar, editar, aclaración, recuperación curada).
+- **`app/domain/estado.js`**: `ESTADO_LABELS`, `esPropuestaElegida`, `esCancelado`, `esActivo` — las reglas de estado del pedido en un solo lugar, incluida la compatibilidad con el estado legacy `"cerrado"`. No se agregaron `reservado`/`pagado`/`en_curso`/`finalizado`, tal como está documentado más abajo como pendiente.
+- **`app/domain/interpretation.js`, `genres.js`, `matching.js`, `pricing.js`, `contextSanitize.js`** (+ `app/lib/id.js` para `uid`): la interpretación determinística, detección de géneros, datos simulados de productores y matching, cálculo de precio simulado, y sanitización de contexto al editar — todo sin depender de React, ahora testeable directamente con Node.
+
+**Pruebas nuevas** (`node:test`, sin dependencias nuevas; `pnpm test`): compatibilidad `"cerrado"`/`"propuesta_elegida"`, activos/cancelados, interpretación de grabar/hacer/mezclar/especial, detección de géneros, matching incompatible con cero resultados, conservación de contexto al editar, y cálculo de precio simulado.
+
+**Sin cambios de comportamiento.** Verificado con Playwright en cada uno de los tres commits: acceso, creación y publicación, edición, cancelación, conversación con el límite real de 4 mensajes (confirmado también a nivel de storage), generación de oferta, elección de propuesta, navegación Inicio/Pedidos/Mensajes/Perfil, y datos guardados con estado legacy `"cerrado"` (incluida la migración). `pnpm build` y `pnpm test` sin errores en los tres commits.
+
+**Encontrado pero no corregido** (no era el objetivo de esta tarea): `isRequestStillOpen` (en `ColabApp.jsx`) sólo trata como "cerrado" los estados `"cerrado"` y `"cancelado"` — no `"propuesta_elegida"` directamente. Es una asimetría real frente a `esPropuestaElegida`, pero hoy es inofensiva porque tanto `handleChoose` como `handleCancel` cancelan explícitamente todos los timers de simulación de productores apenas se elige una propuesta o se cancela, así que ese código nunca llega a ejecutarse con un pedido en `"propuesta_elegida"`. Se conservó tal cual para no cambiar comportamiento; vale la pena revisarla si en el futuro se reintroduce lógica que dependa de `isRequestStillOpen` sin pasar por esos mismos flujos.
 
 ## Corrección de inconsistencias de la navegación (misma sesión, más tarde)
 
