@@ -1136,6 +1136,16 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
   const showBookingArea = tieneProfesionalElegido(estado);
   const chosenOffer = showBookingArea ? ofertas.find((o) => o.id === chosenOfferId) || null : null;
 
+  // BookingFlow todavía no entra en el rediseño editorial (bloque aparte) —
+  // mientras haya un profesional elegido, esta pantalla se queda exactamente
+  // como estaba (oscura) para no mostrar su texto claro sobre un fondo claro.
+  // Se decide con el estado recién sondeado, no con el `request` inicial del
+  // padre, así nunca queda desincronizado de lo que realmente se está
+  // mostrando debajo.
+  const chrome = showBookingArea
+    ? { bg: COLORS.bg, accent: COLORS.accent, fontMono: "'IBM Plex Mono', monospace" }
+    : { bg: EDITORIAL.bg, accent: EDITORIAL.accent, fontMono: EDITORIAL.fontMono };
+
   async function enviarAclaracion() {
     if (!aclaracionTexto.trim()) return;
     setEnviandoAclaracion(true);
@@ -1164,28 +1174,33 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div className="q-fade" style={{ display: "flex", flexDirection: "column", height: "100%", background: chrome.bg }}>
       <div style={{ padding: "20px 22px 0", minHeight: 20 }}>
         <div style={{ marginBottom: 10 }}>
-          <TextLink disabled={cancelling} onClick={onBack}>‹ Atrás</TextLink>
+          {showBookingArea ? (
+            <TextLink disabled={cancelling} onClick={onBack}>‹ Atrás</TextLink>
+          ) : (
+            <EditorialBackButton disabled={cancelling} onClick={onBack} />
+          )}
         </div>
         {estado === "cancelado" ? (
-          <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 0.6, color: COLORS.muted, textTransform: "uppercase" }}>
+          <span style={{ fontFamily: EDITORIAL.fontMono, fontSize: 11, letterSpacing: 0.6, color: EDITORIAL.muted, textTransform: "uppercase" }}>
             Pedido cancelado
           </span>
         ) : estado === "reservado" ? (
           // Reservado no ofrece editar ni cancelar: editar dejó de tener
           // sentido con un profesional confirmado, y cancelar con seña
           // pagada requiere un esquema de devoluciones que no existe en este
-          // prototipo (ver context.md).
-          <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 0.6, color: COLORS.accent, textTransform: "uppercase" }}>
+          // prototipo (ver context.md). Sigue oscuro — es parte de
+          // BookingFlow, todavía sin rediseñar.
+          <span style={{ fontFamily: chrome.fontMono, fontSize: 11, letterSpacing: 0.6, color: chrome.accent, textTransform: "uppercase" }}>
             Reserva confirmada
           </span>
         ) : confirmingCancel ? (
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 13, color: COLORS.muted }}>¿Cancelar este pedido?</span>
-            <TextLink disabled={cancelling} onClick={confirmarCancelacion}>{cancelling ? "Cancelando…" : "Sí, cancelar"}</TextLink>
-            <TextLink disabled={cancelling} onClick={() => setConfirmingCancel(false)}>No</TextLink>
+            <span style={{ fontFamily: EDITORIAL.fontSans, fontSize: 13, color: EDITORIAL.muted }}>¿Cancelar este pedido?</span>
+            <EditorialTextLink disabled={cancelling} onClick={confirmarCancelacion}>{cancelling ? "Cancelando…" : "Sí, cancelar"}</EditorialTextLink>
+            <EditorialTextLink disabled={cancelling} onClick={() => setConfirmingCancel(false)}>No</EditorialTextLink>
           </div>
         ) : showBookingArea ? (
           // Con una propuesta ya elegida tampoco se ofrece editar ni
@@ -1195,8 +1210,8 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
           null
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <TextLink onClick={onEdit}>Editar pedido</TextLink>
-            <TextLink onClick={() => setConfirmingCancel(true)}>Cancelar pedido</TextLink>
+            <EditorialTextLink onClick={onEdit}>Editar pedido</EditorialTextLink>
+            <EditorialTextLink onClick={() => setConfirmingCancel(true)}>Cancelar pedido</EditorialTextLink>
           </div>
         )}
       </div>
@@ -1213,56 +1228,56 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
         />
       ) : feedVacio && estado === "cancelado" ? (
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "safe center", alignItems: "center", textAlign: "center", padding: "0 26px 26px" }}>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>
             Este pedido fue cancelado. Ya no se están buscando profesionales para él.
           </p>
         </div>
       ) : feedVacio && recovery === "aclaracion" ? (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 26px 26px" }}>
-          <h2 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 20, color: COLORS.text, margin: "0 0 10px", lineHeight: 1.3 }}>
+          <h2 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 22, color: EDITORIAL.carbon, margin: "0 0 10px", lineHeight: 1.25, letterSpacing: -0.2 }}>
             Una aclaración más
           </h2>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, margin: "0 0 20px" }}>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13.5, lineHeight: 1.5, margin: "0 0 20px" }}>
             ¿Hay algún estilo o artista de referencia que ayude a encontrar mejores opciones?
           </p>
-          <UnderlineField value={aclaracionTexto} onChange={(e) => setAclaracionTexto(e.target.value)} placeholder="Ej: algo parecido a..." autoFocus />
+          <EditorialUnderlineField value={aclaracionTexto} onChange={(e) => setAclaracionTexto(e.target.value)} placeholder="Ej: algo parecido a..." autoFocus />
           <div style={{ marginTop: 22 }}>
-            <PrimaryButton full disabled={!aclaracionTexto.trim() || enviandoAclaracion} onClick={enviarAclaracion}>
+            <EditorialPrimaryButton full disabled={!aclaracionTexto.trim() || enviandoAclaracion} onClick={enviarAclaracion}>
               {enviandoAclaracion ? "Buscando…" : "Buscar de nuevo"}
-            </PrimaryButton>
+            </EditorialPrimaryButton>
           </div>
-          {actionError && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, marginTop: 14 }}>{actionError}</p>}
+          {actionError && <p style={{ color: EDITORIAL.error, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, marginTop: 14 }}>{actionError}</p>}
         </div>
       ) : feedVacio && recovery === "curada" ? (
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
-          <h2 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 19, color: COLORS.text, margin: "0 0 10px", lineHeight: 1.3 }}>
+          <h2 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 21, color: EDITORIAL.carbon, margin: "0 0 10px", lineHeight: 1.25, letterSpacing: -0.2 }}>
             Algunas opciones con horario disponible
           </h2>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13, lineHeight: 1.5, marginBottom: 20 }}>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, lineHeight: 1.5, marginBottom: 20 }}>
             No es un match perfecto de estilo, pero tienen disponibilidad ahora.
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div>
             {curados.map((p) => (
-              <div key={p.productor} style={{ display: "flex", gap: 12, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 14 }}>
+              <div key={p.productor} style={{ display: "flex", gap: 12, borderBottom: `1px solid ${EDITORIAL.border}`, padding: "16px 0" }}>
                 <ProducerPhoto name={p.productor} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, color: COLORS.text, fontSize: 14, marginBottom: 3 }}>{p.productor}</div>
-                  <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12.5, lineHeight: 1.4, margin: "0 0 8px" }}>{p.disponibilidad}</p>
-                  <PrimaryButton full disabled={solicitando === p.productor} onClick={() => solicitarHorario(p)}>
+                  <div style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 700, color: EDITORIAL.carbon, fontSize: 14, marginBottom: 3 }}>{p.productor}</div>
+                  <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5, lineHeight: 1.4, margin: "0 0 10px" }}>{p.disponibilidad}</p>
+                  <EditorialPrimaryButton full disabled={solicitando === p.productor} onClick={() => solicitarHorario(p)}>
                     {solicitando === p.productor ? "Solicitando…" : "Solicitar este horario"}
-                  </PrimaryButton>
+                  </EditorialPrimaryButton>
                 </div>
               </div>
             ))}
           </div>
-          {actionError && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, marginTop: 14 }}>{actionError}</p>}
+          {actionError && <p style={{ color: EDITORIAL.error, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, marginTop: 14 }}>{actionError}</p>}
         </div>
       ) : feedVacio ? (
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "safe center", alignItems: "center", textAlign: "center", padding: "0 26px 26px" }}>
-          <h2 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 21, color: COLORS.text, margin: "0 0 10px", lineHeight: 1.3 }}>
+          <h2 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 22, color: EDITORIAL.carbon, margin: "0 0 10px", lineHeight: 1.25, letterSpacing: -0.2 }}>
             Tu proyecto ya está en movimiento
           </h2>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>
             {ampliado
               ? "Estamos ampliando la búsqueda a más estilos para encontrarte opciones. Podés cerrar la app; te avisamos acá."
               : "Estamos seleccionando profesionales que puedan encajar con lo que querés hacer. Podés cerrar la app; te avisamos cuando alguien quiera conocer mejor tu proyecto o enviarte una propuesta."}
@@ -1270,11 +1285,11 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
         </div>
       ) : (
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
-          <h2 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 19, color: COLORS.text, margin: "0 0 20px", lineHeight: 1.3 }}>
+          <h2 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 20, color: EDITORIAL.carbon, margin: "0 0 20px", lineHeight: 1.25, letterSpacing: -0.2 }}>
             Tu proyecto ya está en movimiento
           </h2>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div>
             {intereses
               .filter((it) => !it.resuelto)
               .map((it) => (
@@ -1282,14 +1297,14 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
                   key={it.id}
                   onClick={() => onOpenInteres(it)}
                   className="press offer-in"
-                  style={{ display: "flex", gap: 12, textAlign: "left", background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 14, cursor: "pointer" }}
+                  style={{ display: "flex", gap: 12, textAlign: "left", width: "100%", background: "none", border: "none", borderBottom: `1px solid ${EDITORIAL.border}`, padding: "16px 0", cursor: "pointer" }}
                 >
                   <ProducerPhoto name={it.productor} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, color: COLORS.text, fontSize: 14, marginBottom: 3 }}>
+                    <div style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 700, color: EDITORIAL.carbon, fontSize: 14, marginBottom: 3 }}>
                       {it.productor} quiere conocer mejor tu proyecto
                     </div>
-                    <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12.5, lineHeight: 1.4, margin: 0 }}>{it.porQueEncaja}</p>
+                    <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5, lineHeight: 1.4, margin: 0 }}>{it.porQueEncaja}</p>
                   </div>
                 </button>
               ))}
@@ -1300,13 +1315,13 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
                 key={o.id}
                 onClick={() => onSelectOffer(o)}
                 className="press offer-in"
-                style={{ display: "flex", gap: 12, textAlign: "left", background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 14, cursor: "pointer" }}
+                style={{ display: "flex", gap: 12, textAlign: "left", width: "100%", background: "none", border: "none", borderBottom: `1px solid ${EDITORIAL.border}`, padding: "16px 0", cursor: "pointer" }}
               >
                 <ProducerPhoto name={o.productor} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, color: COLORS.text, fontSize: 14.5, marginBottom: 4 }}>{o.productor}</div>
-                  <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 12.5, lineHeight: 1.4, margin: "0 0 6px" }}>{o.propuesta}</p>
-                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: COLORS.muted, fontSize: 11.5 }}>
+                  <div style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 700, color: EDITORIAL.carbon, fontSize: 14.5, marginBottom: 4 }}>{o.productor}</div>
+                  <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 12.5, lineHeight: 1.4, margin: "0 0 6px" }}>{o.propuesta}</p>
+                  <span style={{ fontFamily: EDITORIAL.fontMono, color: EDITORIAL.muted, fontSize: 11.5 }}>
                     {formatMoney(calculateArtistFinalPrice(o.producerAmount))}
                   </span>
                 </div>
@@ -2013,6 +2028,13 @@ export default function App() {
   // cada una de esas tres ramas de `body`, en vez de recalcularse con una
   // condición aparte que podría desincronizarse de cuál pantalla se eligió.
   let creationFlowActive = false;
+  // true cuando el body es WaitingScreen. El chrome exterior (franja
+  // superior + fondo del marco) se decide con esto + el `request.estado` que
+  // ya tiene el padre — pero WaitingScreen sondea el suyo propio en vivo, así
+  // que su contenido nunca depende de esto para decidir claro/oscuro (ver
+  // `chrome` local dentro de WaitingScreen): esto sólo evita, en el caso
+  // común, que la franja superior quede clara sobre un BookingFlow oscuro.
+  let waitingScreenActive = false;
   let body = null;
   if (profile === undefined || (profile && hasPublishedRequest === undefined)) {
     body = null;
@@ -2043,6 +2065,7 @@ export default function App() {
       />
     );
   } else if (request && !editingLiveRequestId) {
+    waitingScreenActive = true;
     body = (
       <WaitingScreen
         request={request}
@@ -2127,7 +2150,11 @@ export default function App() {
   // Piloto visual "estudio editorial": Gate (sin perfil todavía) e Inicio
   // (sin ningún otro flujo abierto) usan el chrome claro nuevo; el resto de
   // las pestañas y pantallas conserva el chrome oscuro sin ningún cambio.
-  const editorialChrome = profile === null || (hasPublishedRequest === false && !inFlowMode) || creationFlowActive || (!!profile && activeTab === "inicio" && !inFlowMode);
+  const editorialChrome = profile === null
+    || (hasPublishedRequest === false && !inFlowMode)
+    || creationFlowActive
+    || (waitingScreenActive && !tieneProfesionalElegido(request.estado))
+    || (!!profile && (activeTab === "inicio" || activeTab === "pedidos") && !inFlowMode);
   const chrome = editorialChrome
     ? { bg: EDITORIAL.bg, border: EDITORIAL.border, accent: EDITORIAL.accent, fontMono: EDITORIAL.fontMono }
     : { bg: COLORS.bg, border: COLORS.border, accent: COLORS.accent, fontMono: "'IBM Plex Mono', monospace" };
@@ -2188,7 +2215,7 @@ export default function App() {
             centrada por fuera del viewport, tapando el "‹ Atrás" de arriba. */}
         <div style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, overflowY: "auto" }}>{body}</div>
 
-        {profile && hasPublishedRequest && !inFlowMode && <BottomNav active={activeTab} onChange={setActiveTab} light={activeTab === "inicio"} />}
+        {profile && hasPublishedRequest && !inFlowMode && <BottomNav active={activeTab} onChange={setActiveTab} light={activeTab === "inicio" || activeTab === "pedidos"} />}
       </div>
     </div>
   );

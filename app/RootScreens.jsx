@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { COLORS, EDITORIAL } from "./theme.js";
-import { Screen, Label, TextLink, PrimaryButton, UnderlineField, ProducerPhoto, HandDrawnUnderline, HandDrawnArrow } from "./ui/pieces.jsx";
+import { Screen, TextLink, PrimaryButton, UnderlineField, ProducerPhoto, HandDrawnUnderline, HandDrawnArrow, EditorialLabel, EditorialPrimaryButton } from "./ui/pieces.jsx";
 import RequestComposer from "./features/request/RequestComposer.jsx";
 import { getAllRequests } from "./lib/storage.js";
 import { ESTADO_LABELS, esPropuestaElegida, esActivo, tieneProfesionalElegido, requestNeedsArtistInput } from "./domain/estado.js";
@@ -193,25 +193,27 @@ function OrderRow({ request, onOpen }) {
     <button
       onClick={() => onOpen(request)}
       className="press"
-      style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${COLORS.border}`, padding: "14px 2px", cursor: "pointer" }}
+      style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${EDITORIAL.border}`, padding: "16px 2px", cursor: "pointer" }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 0.5, color: COLORS.muted, textTransform: "uppercase", marginBottom: 5 }}>
+        <div style={{ fontFamily: EDITORIAL.fontMono, fontSize: 10.5, letterSpacing: 0.5, color: EDITORIAL.muted, textTransform: "uppercase", marginBottom: 5 }}>
           {ESTADO_LABELS[request.estado] || request.estado}
         </div>
-        <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 14.5, color: COLORS.text, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {/* Título del pedido en capitalización natural — sólo la etiqueta de
+            estado arriba va en mayúsculas mono. */}
+        <div style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 700, fontSize: 14.5, color: EDITORIAL.carbon, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {request.resumen}
         </div>
-        <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12, color: COLORS.muted }}>
+        <div style={{ fontFamily: EDITORIAL.fontSans, fontSize: 12, color: EDITORIAL.muted }}>
           {formatDate(request.createdAt)}{chosen ? ` · ${chosen.productor}` : ""}
         </div>
         {(hasOfertas || hasConversacion) && (
-          <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 11.5, color: COLORS.accent, marginTop: 4 }}>
+          <div style={{ fontFamily: EDITORIAL.fontSans, fontSize: 11.5, color: EDITORIAL.accent, marginTop: 4 }}>
             {hasOfertas ? `${request.ofertas.length} propuesta${request.ofertas.length > 1 ? "s" : ""}` : "Conversación en curso"}
           </div>
         )}
       </div>
-      <span style={{ color: COLORS.muted, fontSize: 16, flexShrink: 0, marginTop: 2 }}>›</span>
+      <span style={{ color: EDITORIAL.muted, fontSize: 16, flexShrink: 0, marginTop: 2 }}>›</span>
     </button>
   );
 }
@@ -222,24 +224,30 @@ export function OrdersScreen({ artistName, onOpenRequest, onCreate }) {
   const anteriores = requests.filter((r) => !esActivo(r.estado));
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <RootHeader title="Tus pedidos" />
+    <div className="q-fade" style={{ display: "flex", flexDirection: "column", height: "100%", background: EDITORIAL.bg }}>
+      <div style={{ padding: "22px 22px 4px" }}>
+        <h1 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 24, color: EDITORIAL.carbon, margin: 0, lineHeight: 1.25, letterSpacing: -0.2 }}>
+          Tus pedidos
+        </h1>
+      </div>
       {requests.length === 0 ? (
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "safe center", alignItems: "center", textAlign: "center", padding: "0 26px 26px" }}>
-          <p style={{ ...mutedSmall, marginBottom: 18 }}>Todavía no tenés pedidos. Contale a COLAB qué querés hacer y te ayudamos a encontrar profesionales.</p>
-          <PrimaryButton onClick={onCreate}>Crear un pedido</PrimaryButton>
+          <p style={{ fontFamily: EDITORIAL.fontSans, fontSize: 13, color: EDITORIAL.muted, lineHeight: 1.5, margin: "0 0 18px" }}>
+            Todavía no tenés pedidos. Contale a COLAB qué querés hacer y te ayudamos a encontrar profesionales.
+          </p>
+          <EditorialPrimaryButton onClick={onCreate}>Crear un pedido</EditorialPrimaryButton>
         </div>
       ) : (
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
           {enCurso.length > 0 && (
             <div style={{ marginBottom: anteriores.length > 0 ? 26 : 0 }}>
-              <Label>En curso</Label>
+              <EditorialLabel>En curso</EditorialLabel>
               {enCurso.map((r) => <OrderRow key={r.id} request={r} onOpen={onOpenRequest} />)}
             </div>
           )}
           {anteriores.length > 0 && (
             <div>
-              <Label>Anteriores</Label>
+              <EditorialLabel>Anteriores</EditorialLabel>
               {anteriores.map((r) => <OrderRow key={r.id} request={r} onOpen={onOpenRequest} />)}
             </div>
           )}
