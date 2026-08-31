@@ -1,5 +1,5 @@
 import React from "react";
-import { COLORS } from "./theme.js";
+import { COLORS, EDITORIAL } from "./theme.js";
 
 /* Iconos de línea minimalistas, sin librería externa — mismo espíritu
    editorial del resto del prototipo (sin relleno, trazo fino). */
@@ -45,22 +45,28 @@ export const TABS = [
   { id: "perfil", label: "Perfil", Icon: ProfileIcon },
 ];
 
-export default function BottomNav({ active, onChange }) {
+// `light` habilita la versión "estudio editorial" del nav — piloto
+// limitado a la pestaña Inicio mientras se evalúa el rediseño; las demás
+// pestañas siguen mostrando el nav oscuro sin ningún cambio.
+export default function BottomNav({ active, onChange, light }) {
+  const palette = light
+    ? { bg: EDITORIAL.bg, border: EDITORIAL.border, activeColor: EDITORIAL.accent, mutedColor: EDITORIAL.muted, font: EDITORIAL.fontSans }
+    : { bg: COLORS.bg, border: COLORS.border, activeColor: COLORS.accent, mutedColor: COLORS.muted, font: "'IBM Plex Sans', sans-serif" };
   return (
     <nav
       style={{
         position: "relative",
         zIndex: 1,
         display: "flex",
-        background: COLORS.bg,
-        borderTop: `1px solid ${COLORS.border}`,
+        background: palette.bg,
+        borderTop: `1px solid ${palette.border}`,
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
         flexShrink: 0,
       }}
     >
       {TABS.map(({ id, label, Icon }) => {
         const isActive = active === id;
-        const color = isActive ? COLORS.accent : COLORS.muted;
+        const color = isActive ? palette.activeColor : palette.mutedColor;
         return (
           <button
             key={id}
@@ -79,7 +85,7 @@ export default function BottomNav({ active, onChange }) {
             }}
           >
             <Icon color={color} />
-            <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 11, fontWeight: isActive ? 700 : 500, color }}>
+            <span style={{ fontFamily: palette.font, fontSize: 11, fontWeight: isActive ? 700 : 500, color }}>
               {label}
             </span>
           </button>

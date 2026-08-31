@@ -1,10 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { COLORS } from "./theme.js";
+import { COLORS, EDITORIAL } from "./theme.js";
 import BottomNav from "./BottomNav.jsx";
 import { HomeScreen, OrdersScreen, MessagesScreen, ProfileScreen, HelpScreen, PrivacyScreen, EditNameScreen } from "./RootScreens.jsx";
-import { PrimaryButton, SecondaryButton, TextLink, Label, UnderlineField, underlineInputStyle, Screen, ProducerPhoto, BigOption } from "./ui/pieces.jsx";
+import {
+  PrimaryButton, SecondaryButton, TextLink, Label, UnderlineField, underlineInputStyle, Screen, ProducerPhoto, BigOption,
+  EditorialPrimaryButton, EditorialSecondaryButton, EditorialTextLink, EditorialUnderlineField, editorialUnderlineInputStyle, HandDrawnUnderline,
+} from "./ui/pieces.jsx";
 import { uid } from "./lib/id.js";
 import { formatMoney } from "./lib/format.js";
 import {
@@ -140,20 +143,25 @@ function Gate({ onDone }) {
   if (step === "auth") {
     return (
       <Screen>
-        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 2, color: COLORS.accent, marginBottom: 14 }}>COLAB</div>
-        <h1 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 26, color: COLORS.text, lineHeight: 1.25, margin: "0 0 26px" }}>
-          Para empezar, conectá tu cuenta.
+        <div style={{ fontFamily: EDITORIAL.fontMono, fontSize: 11, letterSpacing: 2, color: EDITORIAL.accent, marginBottom: 18 }}>COLAB</div>
+        <h1 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 40, color: EDITORIAL.carbon, lineHeight: 1.08, letterSpacing: -0.6, margin: "0 0 28px" }}>
+          Para empezar,{" "}
+          <span style={{ position: "relative", display: "inline-block" }}>
+            conectá
+            <HandDrawnUnderline width={100} color={EDITORIAL.accent} style={{ position: "absolute", left: 0, bottom: -8 }} />
+          </span>{" "}
+          tu cuenta.
         </h1>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <PrimaryButton full disabled={connecting} onClick={() => beginAuth("google")}>
+          <EditorialPrimaryButton full disabled={connecting} onClick={() => beginAuth("google")}>
             {connecting && provider === "google" ? "Conectando…" : "Continuar con Google"}
-          </PrimaryButton>
-          <SecondaryButton full disabled={connecting} onClick={() => beginAuth("apple")}>
+          </EditorialPrimaryButton>
+          <EditorialSecondaryButton full disabled={connecting} onClick={() => beginAuth("apple")}>
             {connecting && provider === "apple" ? "Conectando…" : "Continuar con Apple"}
-          </SecondaryButton>
-          <SecondaryButton full disabled={connecting} onClick={() => beginAuth("email")}>Continuar con mail</SecondaryButton>
+          </EditorialSecondaryButton>
+          <EditorialSecondaryButton full disabled={connecting} onClick={() => beginAuth("email")}>Continuar con mail</EditorialSecondaryButton>
         </div>
-        <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 11.5, lineHeight: 1.45, margin: "16px 0 0" }}>
+        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 11.5, lineHeight: 1.45, margin: "16px 0 0" }}>
           Apple Music se conecta después, si querés usarlo para compartir referencias. No es lo mismo que iniciar sesión con Apple.
         </p>
       </Screen>
@@ -162,18 +170,18 @@ function Gate({ onDone }) {
 
   if (step === "email") {
     return (
-      <Screen topSlot={<TextLink onClick={() => setStep("auth")}>‹ Atrás</TextLink>}>
-        <h1 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 24, color: COLORS.text, lineHeight: 1.3, margin: "0 0 22px" }}>¿Cuál es tu mail?</h1>
-        <UnderlineField value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="vos@ejemplo.com" autoFocus onKeyDown={(e) => e.key === "Enter" && continueWithEmail()} />
-        {gateError && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, marginTop: 10 }}>{gateError}</p>}
-        <div style={{ marginTop: 24 }}><PrimaryButton full onClick={continueWithEmail}>Continuar</PrimaryButton></div>
+      <Screen topSlot={<EditorialTextLink onClick={() => setStep("auth")}>‹ Atrás</EditorialTextLink>}>
+        <h1 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 700, fontSize: 28, color: EDITORIAL.carbon, lineHeight: 1.3, margin: "0 0 22px" }}>¿Cuál es tu mail?</h1>
+        <EditorialUnderlineField value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="vos@ejemplo.com" autoFocus onKeyDown={(e) => e.key === "Enter" && continueWithEmail()} />
+        {gateError && <p style={{ color: EDITORIAL.error, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, marginTop: 10 }}>{gateError}</p>}
+        <div style={{ marginTop: 24 }}><EditorialPrimaryButton full onClick={continueWithEmail}>Continuar</EditorialPrimaryButton></div>
       </Screen>
     );
   }
 
   if (step === "request") {
     return (
-      <Screen topSlot={<TextLink onClick={() => setStep(provider === "email" ? "email" : "auth")}>‹ Atrás</TextLink>}>
+      <Screen topSlot={<EditorialTextLink onClick={() => setStep(provider === "email" ? "email" : "auth")}>‹ Atrás</EditorialTextLink>}>
         <RequestComposer
           title="¿Qué querés hacer?"
           text={requestText}
@@ -188,11 +196,11 @@ function Gate({ onDone }) {
   }
 
   return (
-    <Screen topSlot={<TextLink onClick={() => setStep("request")}>‹ Atrás</TextLink>}>
-      <h1 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 24, color: COLORS.text, lineHeight: 1.3, margin: "0 0 8px" }}>
+    <Screen topSlot={<EditorialTextLink onClick={() => setStep("request")}>‹ Atrás</EditorialTextLink>}>
+      <h1 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 700, fontSize: 28, color: EDITORIAL.carbon, lineHeight: 1.3, margin: "0 0 8px" }}>
         ¿Cómo querés que te llamemos?
       </h1>
-      <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13, lineHeight: 1.5, margin: "0 0 24px" }}>
+      <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, lineHeight: 1.5, margin: "0 0 24px" }}>
         Puede ser tu nombre artístico o como te dicen habitualmente.
       </p>
       <div style={{ position: "relative" }}>
@@ -202,20 +210,20 @@ function Gate({ onDone }) {
           onFocus={() => setNameFocused(true)}
           onBlur={() => setNameFocused(false)}
           autoFocus
-          style={{ ...underlineInputStyle, position: "relative", zIndex: 2 }}
+          style={{ ...editorialUnderlineInputStyle, position: "relative", zIndex: 2 }}
         />
         {!name && (
-          <div style={{ position: "absolute", inset: "8px 0 auto", pointerEvents: "none", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 17 }}>
-            <AnimatedPrompt examples={artistExamples} />
+          <div style={{ position: "absolute", inset: "8px 0 auto", pointerEvents: "none", fontFamily: EDITORIAL.fontSans, fontSize: 17 }}>
+            <AnimatedPrompt examples={artistExamples} color={EDITORIAL.muted} />
           </div>
         )}
-        <div style={{ height: 1, background: nameFocused ? COLORS.accent : COLORS.border, transition: "background .15s ease" }} />
+        <div style={{ height: 1.5, background: nameFocused ? EDITORIAL.carbon : EDITORIAL.border, transition: "background .15s ease" }} />
       </div>
-      {gateError && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, marginTop: 10 }}>{gateError}</p>}
+      {gateError && <p style={{ color: EDITORIAL.error, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, marginTop: 10 }}>{gateError}</p>}
       <div style={{ marginTop: 24 }}>
-        <PrimaryButton full disabled={name.trim().length < 2 || saving} onClick={finishGate}>
+        <EditorialPrimaryButton full disabled={name.trim().length < 2 || saving} onClick={finishGate}>
           {saving ? "Preparando tu pedido…" : "Continuar"}
-        </PrimaryButton>
+        </EditorialPrimaryButton>
       </div>
     </Screen>
   );
@@ -1910,8 +1918,16 @@ export default function App() {
     );
   }
 
+  // Piloto visual "estudio editorial": Gate (sin perfil todavía) e Inicio
+  // (sin ningún otro flujo abierto) usan el chrome claro nuevo; el resto de
+  // las pestañas y pantallas conserva el chrome oscuro sin ningún cambio.
+  const editorialChrome = profile === null || (!!profile && activeTab === "inicio" && !inFlowMode);
+  const chrome = editorialChrome
+    ? { bg: EDITORIAL.bg, border: EDITORIAL.border, accent: EDITORIAL.accent, fontMono: EDITORIAL.fontMono }
+    : { bg: COLORS.bg, border: COLORS.border, accent: COLORS.accent, fontMono: "'IBM Plex Mono', monospace" };
+
   return (
-    <div style={{ width: "100%", height: "100vh", minHeight: 560, display: "flex", alignItems: "center", justifyContent: "center", background: COLORS.bg }}>
+    <div style={{ width: "100%", height: "100vh", minHeight: 560, display: "flex", alignItems: "center", justifyContent: "center", background: chrome.bg }}>
       <div
         style={{
           position: "relative",
@@ -1921,29 +1937,29 @@ export default function App() {
           maxHeight: 840,
           minHeight: 560,
           height: "90vh",
-          background: COLORS.bg,
+          background: chrome.bg,
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
           borderRadius: 18,
-          border: `1px solid ${COLORS.border}`,
+          border: `1px solid ${chrome.border}`,
         }}
       >
-        <Textura />
+        {!editorialChrome && <Textura />}
         <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
           * { box-sizing: border-box; }
           input::placeholder, textarea::placeholder { color: #8F8D8F88; }
-          input:focus, textarea:focus, button:focus-visible { outline: 2px solid ${COLORS.accent}; outline-offset: 1px; }
+          input:focus, textarea:focus, button:focus-visible { outline: 2px solid ${chrome.accent}; outline-offset: 1px; }
           ::-webkit-scrollbar { width: 6px; }
-          ::-webkit-scrollbar-thumb { background: ${COLORS.border}; border-radius: 4px; }
+          ::-webkit-scrollbar-thumb { background: ${chrome.border}; border-radius: 4px; }
           .press { transition: opacity .1s ease; }
           .press:active { opacity: .7; }
           .offer-in { animation: offerIn .25s ease; }
           @keyframes offerIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
           .q-fade { animation: qFade .2s ease; }
           @keyframes qFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-          .blink-caret { animation: blink 1s step-end infinite; color: ${COLORS.accent}; }
+          .blink-caret { animation: blink 1s step-end infinite; color: ${chrome.accent}; }
           @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
           @media (prefers-reduced-motion: reduce) {
             .press, .offer-in, .q-fade, .blink-caret { animation: none !important; transition: none !important; }
@@ -1951,8 +1967,8 @@ export default function App() {
         `}</style>
 
         {profile !== undefined && (
-          <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", padding: "12px 18px", borderBottom: `1px solid ${COLORS.border}` }}>
-            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 2, color: COLORS.accent }}>COLAB</span>
+          <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", padding: "12px 18px", borderBottom: `1px solid ${chrome.border}` }}>
+            <span style={{ fontFamily: chrome.fontMono, fontSize: 11, letterSpacing: 2, color: chrome.accent }}>COLAB</span>
           </div>
         )}
 
@@ -1963,7 +1979,7 @@ export default function App() {
             centrada por fuera del viewport, tapando el "‹ Atrás" de arriba. */}
         <div style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, overflowY: "auto" }}>{body}</div>
 
-        {profile && !inFlowMode && <BottomNav active={activeTab} onChange={setActiveTab} />}
+        {profile && !inFlowMode && <BottomNav active={activeTab} onChange={setActiveTab} light={activeTab === "inicio"} />}
       </div>
     </div>
   );

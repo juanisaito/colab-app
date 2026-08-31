@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { COLORS } from "./theme.js";
-import { Screen, Label, TextLink, PrimaryButton, UnderlineField, ProducerPhoto } from "./ui/pieces.jsx";
+import { COLORS, EDITORIAL } from "./theme.js";
+import { Screen, Label, TextLink, PrimaryButton, UnderlineField, ProducerPhoto, HandDrawnUnderline, HandDrawnArrow } from "./ui/pieces.jsx";
 import RequestComposer from "./features/request/RequestComposer.jsx";
 import { getAllRequests } from "./lib/storage.js";
 import { ESTADO_LABELS, esPropuestaElegida, esActivo, tieneProfesionalElegido, requestNeedsArtistInput } from "./domain/estado.js";
@@ -125,7 +125,23 @@ export function HomeScreen({ artistName, onSubmit, interpreting, error, text, on
     : "";
 
   return (
-    <div style={{ height: "100%", overflowY: "auto", padding: "24px 22px 30px", display: "flex", flexDirection: "column", justifyContent: active ? "flex-start" : "center", gap: active ? 28 : 24 }}>
+    <div style={{ height: "100%", overflowY: "auto", background: EDITORIAL.bg, padding: "24px 22px 30px", display: "flex", flexDirection: "column", justifyContent: active ? "flex-start" : "center", gap: active ? 30 : 22 }}>
+      {!active && (
+        <div style={{ textAlign: "center" }}>
+          <h1 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 38, color: EDITORIAL.carbon, lineHeight: 1.08, letterSpacing: -0.6, margin: 0 }}>
+            Tu próxima{" "}
+            <span style={{ position: "relative", display: "inline-block" }}>
+              canción,
+              <HandDrawnUnderline width={104} color={EDITORIAL.accent} style={{ position: "absolute", left: 0, bottom: -6 }} />
+            </span>{" "}
+            en marcha.
+          </h1>
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 8 }}>
+            <HandDrawnArrow width={30} color={EDITORIAL.carbon} style={{ transform: "rotate(90deg)" }} />
+          </div>
+        </div>
+      )}
+
       <div style={{ minHeight: active ? 205 : "auto", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <RequestComposer
           title={active ? "¿Querés hacer otro pedido?" : "¿Qué querés hacer?"}
@@ -144,20 +160,22 @@ export function HomeScreen({ artistName, onSubmit, interpreting, error, text, on
 
       {active && (
         <div>
-          <Label>En movimiento</Label>
+          <div style={{ fontFamily: EDITORIAL.fontMono, fontSize: 10.5, letterSpacing: 0.6, color: EDITORIAL.muted, marginBottom: 8, textTransform: "uppercase" }}>
+            En movimiento
+          </div>
           <button
             onClick={() => onOpenRequest(active)}
             className="press"
-            style={{ width: "100%", textAlign: "left", background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 11, padding: "11px 12px", cursor: "pointer" }}
+            style={{ width: "100%", textAlign: "left", background: "none", border: "none", borderTop: `1.5px solid ${EDITORIAL.carbon}`, borderBottom: `1.5px solid ${EDITORIAL.carbon}`, padding: "14px 2px", cursor: "pointer" }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 5 }}>
-              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 0.5, color: COLORS.accent, textTransform: "uppercase" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <span style={{ fontFamily: EDITORIAL.fontMono, fontSize: 10.5, letterSpacing: 0.5, color: EDITORIAL.accent, textTransform: "uppercase", fontWeight: 600 }}>
                 {ESTADO_LABELS[active.estado]}
               </span>
-              <span style={{ color: COLORS.muted, fontSize: 15 }}>›</span>
+              <span style={{ color: EDITORIAL.muted, fontSize: 15 }}>›</span>
             </div>
-            <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 500, fontSize: 12.75, color: COLORS.text, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{requestTitle}</div>
-            <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 11.75, lineHeight: 1.35, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ultimaNovedad(active)}</p>
+            <div style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 700, fontSize: 13.5, color: EDITORIAL.carbon, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{requestTitle}</div>
+            <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 11.75, lineHeight: 1.35, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ultimaNovedad(active)}</p>
           </button>
         </div>
       )}

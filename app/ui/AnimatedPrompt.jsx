@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { COLORS } from "../theme.js";
 
-export default function AnimatedPrompt({ examples }) {
+export default function AnimatedPrompt({ examples, color }) {
   const [displayedText, setDisplayedText] = useState("");
   const [exampleIndex, setExampleIndex] = useState(0);
   const [phase, setPhase] = useState("typing");
@@ -30,7 +30,7 @@ export default function AnimatedPrompt({ examples }) {
   if (!examples?.length) return null;
 
   return (
-    <span aria-hidden="true" style={{ color: COLORS.muted }}>
+    <span aria-hidden="true" style={{ color: color || COLORS.muted }}>
       {displayedText}
       <span className="blink-caret">|</span>
     </span>

@@ -13,3 +13,20 @@ export const COLORS = {
   muted: "#8F8D91",
   accent: "#2E4BFF",
 };
+
+// Paleta "estudio editorial" en evaluación como piloto (variante B
+// controlada, aprobada para Gate, RequestComposer e Inicio). Vive junto a
+// COLORS sin reemplazarla: el resto de las pantallas sigue usando COLORS
+// sin ningún cambio mientras se evalúa este rediseño.
+export const EDITORIAL = {
+  bg: "#FAF7F1",
+  surface: "#F2EDE4",
+  border: "#E1DCD1",
+  carbon: "#1B1815",
+  muted: "#8B8579",
+  accent: "#C2410C",
+  accentAlt: "#E15412",
+  error: "#8C3A2B",
+  fontMono: "'IBM Plex Mono', ui-monospace, monospace",
+  fontSans: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+};

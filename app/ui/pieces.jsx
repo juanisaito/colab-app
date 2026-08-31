@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { COLORS } from "../theme.js";
+import { COLORS, EDITORIAL } from "../theme.js";
 
 /* ============================================================
    Piezas visuales compartidas entre ColabApp.jsx y RootScreens.jsx.
@@ -189,5 +189,139 @@ export function BigOption({ label, selected, onClick }) {
       </span>
       {selected && <span style={{ width: 7, height: 7, borderRadius: "50%", background: COLORS.accent, flexShrink: 0 }} />}
     </button>
+  );
+}
+
+/* ============================================================
+   Piloto visual "estudio editorial" — variantes nuevas y aditivas.
+   Sólo las consumen Gate, RequestComposer e Inicio mientras se evalúa el
+   rediseño; todas las piezas de arriba siguen intactas para el resto de
+   la app. No reemplazan nada existente.
+   ============================================================ */
+
+export function EditorialPrimaryButton({ children, onClick, disabled, full }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="press"
+      style={{
+        background: disabled ? EDITORIAL.border : EDITORIAL.accent,
+        color: disabled ? EDITORIAL.muted : EDITORIAL.bg,
+        border: `1px solid ${disabled ? EDITORIAL.border : EDITORIAL.accent}`,
+        borderRadius: 3,
+        padding: "14px 20px",
+        fontFamily: EDITORIAL.fontSans,
+        fontWeight: 700,
+        fontSize: 14.5,
+        width: full ? "100%" : "auto",
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function EditorialSecondaryButton({ children, onClick, disabled, full }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="press"
+      style={{
+        background: "transparent",
+        color: disabled ? EDITORIAL.muted : EDITORIAL.carbon,
+        border: `1.5px solid ${disabled ? EDITORIAL.border : EDITORIAL.carbon}`,
+        borderRadius: 3,
+        padding: "13px 20px",
+        fontFamily: EDITORIAL.fontSans,
+        fontWeight: 700,
+        fontSize: 14.5,
+        width: full ? "100%" : "auto",
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function EditorialTextLink({ children, onClick, disabled }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="press"
+      style={{
+        background: "none",
+        border: "none",
+        padding: 0,
+        cursor: disabled ? "default" : "pointer",
+        fontFamily: EDITORIAL.fontSans,
+        fontSize: 13.5,
+        color: disabled ? EDITORIAL.border : EDITORIAL.muted,
+        textDecoration: "underline",
+        textUnderlineOffset: 3,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+export const editorialUnderlineInputStyle = {
+  width: "100%",
+  background: "transparent",
+  border: "none",
+  padding: "8px 0",
+  color: EDITORIAL.carbon,
+  fontFamily: EDITORIAL.fontSans,
+  fontSize: 17,
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+export function EditorialUnderlineField({ value, onChange, placeholder, autoFocus, onKeyDown, multiline, disabled, small, type = "text" }) {
+  const [focused, setFocused] = useState(false);
+  const Tag = multiline ? "textarea" : "input";
+  return (
+    <div>
+      <Tag
+        value={value}
+        onChange={onChange}
+        onKeyDown={onKeyDown}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        disabled={disabled}
+        rows={multiline ? 3 : undefined}
+        type={multiline ? undefined : type}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        style={{ ...editorialUnderlineInputStyle, fontSize: small ? 14.5 : 17, resize: multiline ? "none" : undefined, lineHeight: multiline ? 1.5 : undefined }}
+      />
+      <div style={{ height: 1.5, background: focused ? EDITORIAL.carbon : EDITORIAL.border, transition: "background .15s ease" }} />
+    </div>
+  );
+}
+
+// Marca dibujada a mano — subrayado ondulado. Sólo para momentos de
+// onboarding/estados hero, nunca cerca de precios o condiciones.
+export function HandDrawnUnderline({ width = 130, color = EDITORIAL.carbon, style }) {
+  return (
+    <svg width={width} height={Math.round(width * 0.09)} viewBox="0 0 160 14" style={{ display: "block", overflow: "visible", ...style }}>
+      <path d="M2 8 Q20 4 40 9 T80 7 T120 10 T158 6" stroke={color} strokeWidth={1.8} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// Marca dibujada a mano — flecha direccional para pistas de onboarding.
+export function HandDrawnArrow({ width = 46, color = EDITORIAL.carbon, style }) {
+  return (
+    <svg width={width} height={Math.round(width * 0.56)} viewBox="0 0 60 40" style={{ display: "block", overflow: "visible", ...style }}>
+      <path d="M4 30 Q30 34 50 14" stroke={color} strokeWidth={1.8} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M50 14 L39 10" stroke={color} strokeWidth={1.8} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M50 14 L44 24" stroke={color} strokeWidth={1.8} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
