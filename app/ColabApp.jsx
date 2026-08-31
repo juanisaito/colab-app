@@ -137,7 +137,7 @@ function Gate({ onDone }) {
       requestText.trim()
     );
     setSaving(false);
-    if (!ok) setGateError("No pudimos guardar tu perfil. Probá de nuevo.");
+    if (!ok) setGateError("No pudimos preparar tu primer pedido. Probá de nuevo.");
   }
 
   if (step === "auth") {
@@ -1266,10 +1266,21 @@ export default function App() {
   // ensureSlotConfirmationScheduled más abajo.
   const scheduledSlotConfirmations = useRef(new Set());
 
+  // Fuente de verdad de "el onboarding ya terminó": si el artista tiene al
+  // menos un pedido persistido. No es un booleano duplicado que pueda
+  // desincronizarse — se deriva de getAllRequests(), la misma colección que
+  // ya usan useMyRequests (Home) y el chequeo de blockingRequest más abajo.
+  // undefined mientras no se pudo determinar todavía (recién montado).
+  const [hasPublishedRequest, setHasPublishedRequest] = useState(undefined);
+
   useEffect(() => {
     (async () => {
       const p = await storageGet(PROFILE_KEY, false);
       setProfile(p);
+      if (p) {
+        const all = await getAllRequests();
+        setHasPublishedRequest(all.some((r) => r.artistName === p.name));
+      }
     })();
     migrateLegacyClosedRequests();
     return () => timers.current.forEach(clearTimeout);
@@ -1278,9 +1289,17 @@ export default function App() {
   async function handleGateDone(profileData, initialRequestText) {
     const ok = await storageSet(PROFILE_KEY, profileData, false);
     if (!ok) return false;
-    await handleTextSubmit(initialRequestText);
+    const interpreted = await handleTextSubmit(initialRequestText);
     setProfile(profileData);
-    return true;
+    // Recalculado para este perfil (no heredado del anterior): importa sobre
+    // todo tras un cierre de sesión seguido de un registro nuevo, y sigue
+    // siendo la misma fuente de verdad — pedidos realmente persistidos.
+    const all = await getAllRequests();
+    setHasPublishedRequest(all.some((r) => r.artistName === profileData.name));
+    // El perfil ya quedó guardado incluso si esto da false: se lo devolvemos
+    // a Gate para que muestre un error y deje reintentar, en vez de avanzar
+    // en silencio con una interpretación que nunca se guardó.
+    return interpreted;
   }
 
   async function handleTextSubmit(t) {
@@ -1412,6 +1431,7 @@ export default function App() {
     setRequest(newRequest);
     setStartedCreating(false);
     setActiveTab("pedidos");
+    setHasPublishedRequest(true);
     scheduleSimulatedProducers(newRequest, productores);
   }
 
@@ -1801,6 +1821,7 @@ export default function App() {
   async function handleSignOut() {
     await storageSet(PROFILE_KEY, null, false);
     setProfile(null);
+    setHasPublishedRequest(undefined);
     setActiveTab("inicio");
   }
 
@@ -1810,10 +1831,16 @@ export default function App() {
   // activa persiste sola mientras se navega dentro de un pedido o chat.
   const inFlowMode = startedCreating || !!request || !!openInteres || !!selectedOffer || showHelp || showPrivacy || editingProfileName;
 
+  // Un artista con perfil pero sin ningún pedido publicado todavía retoma el
+  // onboarding (Gate) en vez de entrar a la app con pestañas — pero sólo
+  // cuando además no hay un pedido en construcción (startedCreating/request):
+  // cubre una recarga a mitad de camino o una interpretación que falló justo
+  // después de guardar el perfil, sin interrumpir a alguien que ya está dentro
+  // del flujo de contexto/resumen avanzando hacia su primera publicación.
   let body = null;
-  if (profile === undefined) {
+  if (profile === undefined || (profile && hasPublishedRequest === undefined)) {
     body = null;
-  } else if (profile === null) {
+  } else if (profile === null || (hasPublishedRequest === false && !inFlowMode)) {
     body = <Gate onDone={handleGateDone} />;
   } else if (selectedOffer) {
     body = <OfferDetail offer={selectedOffer} choosing={choosing} messaging={messaging} chooseError={chooseError} onBack={() => { setSelectedOffer(null); setChooseError(null); }} onMessage={() => handleMessageOffer(selectedOffer)} onChoose={() => handleChoose(selectedOffer)} />;
@@ -1921,7 +1948,7 @@ export default function App() {
   // Piloto visual "estudio editorial": Gate (sin perfil todavía) e Inicio
   // (sin ningún otro flujo abierto) usan el chrome claro nuevo; el resto de
   // las pestañas y pantallas conserva el chrome oscuro sin ningún cambio.
-  const editorialChrome = profile === null || (!!profile && activeTab === "inicio" && !inFlowMode);
+  const editorialChrome = profile === null || (hasPublishedRequest === false && !inFlowMode) || (!!profile && activeTab === "inicio" && !inFlowMode);
   const chrome = editorialChrome
     ? { bg: EDITORIAL.bg, border: EDITORIAL.border, accent: EDITORIAL.accent, fontMono: EDITORIAL.fontMono }
     : { bg: COLORS.bg, border: COLORS.border, accent: COLORS.accent, fontMono: "'IBM Plex Mono', monospace" };
@@ -1979,7 +2006,7 @@ export default function App() {
             centrada por fuera del viewport, tapando el "‹ Atrás" de arriba. */}
         <div style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, overflowY: "auto" }}>{body}</div>
 
-        {profile && !inFlowMode && <BottomNav active={activeTab} onChange={setActiveTab} light={activeTab === "inicio"} />}
+        {profile && hasPublishedRequest && !inFlowMode && <BottomNav active={activeTab} onChange={setActiveTab} light={activeTab === "inicio"} />}
       </div>
     </div>
   );
