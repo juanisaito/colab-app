@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { Screen, Label, TextLink, PrimaryButton, UnderlineField, ProducerPhoto, underlineInputStyle } from "./ui/pieces.jsx";
-import AnimatedPrompt from "./ui/AnimatedPrompt.jsx";
+import { Screen, Label, TextLink, PrimaryButton, UnderlineField, ProducerPhoto } from "./ui/pieces.jsx";
+import RequestComposer from "./features/request/RequestComposer.jsx";
 import { getAllRequests } from "./lib/storage.js";
-import { ESTADO_LABELS, esPropuestaElegida, esActivo, tieneProfesionalElegido } from "./domain/estado.js";
+import { ESTADO_LABELS, esPropuestaElegida, esActivo, tieneProfesionalElegido, requestNeedsArtistInput } from "./domain/estado.js";
 
 /* ============================================================
    Pantallas raíz de la navegación (Inicio / Pedidos / Mensajes / Perfil)
@@ -116,67 +116,32 @@ function RootHeader({ title, children }) {
 
 /* ---------------- Inicio ---------------- */
 
-const requestExamples = [
-  "Quiero grabar voces",
-  "Quiero producir una canción desde cero",
-  "Necesito mezclar y masterizar un tema",
-  "Busco un sonidista para tocar en vivo",
-];
-
-function HomeRequestComposer({ compact, text, onTextChange, onSubmit, interpreting, error }) {
-  return (
-    <div style={compact ? { borderTop: `1px solid ${COLORS.border}`, paddingTop: 16 } : undefined}>
-      <Label>{compact ? "¿Querés hacer otro pedido?" : "¿Qué querés hacer?"}</Label>
-      <div style={{ position: "relative" }}>
-        <textarea
-          value={text}
-          onChange={(event) => onTextChange(event.target.value)}
-          rows={compact ? 1 : 2}
-          disabled={interpreting}
-          aria-label="Contanos qué querés hacer"
-          style={{
-            ...underlineInputStyle,
-            position: "relative",
-            zIndex: 2,
-            resize: "none",
-            lineHeight: 1.45,
-            minHeight: compact ? 46 : 62,
-            maxHeight: compact ? 72 : 104,
-            fontSize: compact ? 15.5 : 17,
-          }}
-        />
-        {!text && (
-          <div
-            style={{
-              position: "absolute",
-              inset: "8px 0 auto",
-              pointerEvents: "none",
-              fontFamily: "'IBM Plex Sans', sans-serif",
-              fontSize: compact ? 15.5 : 17,
-              lineHeight: 1.45,
-            }}
-          >
-            <AnimatedPrompt examples={requestExamples} />
-          </div>
-        )}
-        <div style={{ height: 1, background: COLORS.border }} />
-      </div>
-      {error && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, margin: "9px 0 0" }}>{error}</p>}
-      <div style={{ display: "flex", justifyContent: compact ? "flex-end" : "stretch", marginTop: compact ? 10 : 14 }}>
-        <PrimaryButton full={!compact} disabled={text.trim().length < 3 || interpreting} onClick={() => onSubmit(text.trim())}>
-          {interpreting ? "Entendiendo…" : "Continuar"}
-        </PrimaryButton>
-      </div>
-    </div>
-  );
-}
-
 export function HomeScreen({ artistName, onSubmit, interpreting, error, text, onTextChange, onOpenRequest }) {
   const requests = useMyRequests(artistName);
-  const active = requests.find((r) => esActivo(r.estado)) || null;
+  const blockingRequest = requests.find(requestNeedsArtistInput) || null;
+  const active = blockingRequest || requests.find((r) => esActivo(r.estado)) || null;
+  const requestTitle = active?.resumen
+    ? `${active.resumen.charAt(0).toLowerCase()}${active.resumen.slice(1)}`
+    : "";
 
   return (
-    <div style={{ padding: "24px 22px 26px", display: "flex", flexDirection: "column", gap: active ? 20 : 24 }}>
+    <div style={{ height: "100%", overflowY: "auto", padding: "24px 22px 30px", display: "flex", flexDirection: "column", justifyContent: active ? "flex-start" : "center", gap: active ? 28 : 24 }}>
+      <div style={{ minHeight: active ? 205 : "auto", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <RequestComposer
+          title={active ? "¿Querés hacer otro pedido?" : "¿Qué querés hacer?"}
+          text={text}
+          onTextChange={onTextChange}
+          onSubmit={onSubmit}
+          busy={interpreting}
+          error={error}
+          compact={!!active}
+          centered
+          blocked={!!blockingRequest}
+          blockedMessage={blockingRequest ? "Primero respondé la aclaración del pedido que ya está en movimiento." : null}
+          onBlockedAction={() => onOpenRequest(blockingRequest)}
+        />
+      </div>
+
       {active && (
         <div>
           <Label>En movimiento</Label>
@@ -191,20 +156,11 @@ export function HomeScreen({ artistName, onSubmit, interpreting, error, text, on
               </span>
               <span style={{ color: COLORS.muted, fontSize: 15 }}>›</span>
             </div>
-            <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 14, color: COLORS.text, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{active.resumen}</div>
+            <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 500, fontSize: 12.75, color: COLORS.text, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{requestTitle}</div>
             <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 11.75, lineHeight: 1.35, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ultimaNovedad(active)}</p>
           </button>
         </div>
       )}
-
-      <HomeRequestComposer
-        compact={!!active}
-        text={text}
-        onTextChange={onTextChange}
-        onSubmit={onSubmit}
-        interpreting={interpreting}
-        error={error}
-      />
     </div>
   );
 }

@@ -59,6 +59,15 @@ export function puedeCancelarse(estado) {
   return estado === "esperando" || estado === "con_ofertas";
 }
 
+// A new request must not be started while COLAB is explicitly waiting for
+// information required to continue an existing search. Keeping this rule in
+// the domain layer prevents Home from treating it as a merely visual lock.
+export function requestNeedsArtistInput(request) {
+  return !!request
+    && puedeRecibirActividadDeProductores(request.estado)
+    && request.recovery === "aclaracion";
+}
+
 // Sólo puede seguir escribiendo en la conversación con `productorName` si:
 // - el pedido no está cancelado, y
 // - una vez "reservado", únicamente el profesional elegido (según

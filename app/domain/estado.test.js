@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   esPropuestaElegida, esCancelado, esActivo, tieneProfesionalElegido,
-  puedeRecibirActividadDeProductores, puedeCancelarse,
+  puedeRecibirActividadDeProductores, puedeCancelarse, requestNeedsArtistInput,
   puedeEscribirEnConversacion,
 } from "./estado.js";
 
@@ -54,6 +54,14 @@ test("puedeCancelarse usa una lista permitida y rechaza estados desconocidos", (
   for (const status of ["propuesta_elegida", "cerrado", "reservado", "cancelado", "desconocido", undefined]) {
     assert.equal(puedeCancelarse(status), false);
   }
+});
+
+test("requestNeedsArtistInput bloquea otro pedido sólo mientras falta una aclaración activa", () => {
+  assert.equal(requestNeedsArtistInput({ estado: "esperando", recovery: "aclaracion" }), true);
+  assert.equal(requestNeedsArtistInput({ estado: "con_ofertas", recovery: "aclaracion" }), true);
+  assert.equal(requestNeedsArtistInput({ estado: "esperando", recovery: null }), false);
+  assert.equal(requestNeedsArtistInput({ estado: "reservado", recovery: "aclaracion" }), false);
+  assert.equal(requestNeedsArtistInput(null), false);
 });
 
 test("puedeEscribirEnConversacion rechaza pedidos ausentes o con estados desconocidos", () => {

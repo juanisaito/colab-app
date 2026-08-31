@@ -5,12 +5,14 @@ Actualizado: 30 de agosto de 2026.
 ## Inicio, sugerencias e integración de IA (30 de agosto de 2026)
 
 - Las frases de ejemplo volvieron a aparecer como una sugerencia animada en el alta y en la caja principal de pedidos. El componente compartido vive en `app/ui/AnimatedPrompt.jsx`, para que el comportamiento no vuelva a duplicarse entre pantallas.
-- Cuando ya hay un pedido activo, Inicio muestra una tarjeta de "En movimiento" más compacta y una invitación secundaria, visualmente suave, para crear otro pedido. Si todavía no hay pedidos, el compositor conserva mayor jerarquía.
+- El alta nueva sigue el orden `acceso/registro → qué querés hacer → cómo querés que te llamemos → preguntas de contexto`. El texto del primer pedido se conserva durante el alta y se interpreta recién al terminar el nombre, de modo que las aclaraciones continúan sin pasar antes por Inicio.
+- El compositor compartido se extrajo a `app/features/request/RequestComposer.jsx`. En Inicio aparece centrado y antes de "En movimiento"; la tarjeta del pedido activo queda debajo y su resumen usa menor tamaño y peso visual.
+- Si un pedido activo tiene `recovery === "aclaracion"`, no se puede iniciar otro: Inicio reemplaza la caja por una explicación y el CTA "Completar aclaración". La regla `requestNeedsArtistInput` también se revalida contra el storage dentro de `handleTextSubmit`, así no depende sólo de la pantalla o de que el polling ya se haya actualizado. Al responder, el compositor se habilita automáticamente.
 - Se eliminó el nombre del artista del encabezado superior. El nombre sigue guardado en el perfil y disponible donde aporta contexto, pero no ocupa permanentemente la esquina de todas las pantallas.
 - La interpretación ahora intenta `POST /api/interpret` mediante `interpretRequestViaBackend`; la clave del proveedor sólo se lee en el servidor. Si la ruta no está configurada, tarda demasiado o devuelve datos inválidos, se usa el intérprete local y se informa el fallback en el resumen, sin bloquear el flujo.
 - `server/interpretationApi.js` implementa esa ruta para desarrollo y preview con Vite. En producción hay que mover el mismo contrato a un backend o función serverless; la arquitectura recomendada para interpretación, soporte, sugerencias, matching y moderación está en `AI_ARCHITECTURE.md`.
 - Convención para el código nuevo: nombres de archivos, variables, funciones y comentarios técnicos en inglés; textos visibles para el usuario en español rioplatense. Los campos persistidos que ya existen en español no se renombran sin una migración explícita. Ver `CONTRIBUTING.md`.
-- Verificación actual: 64 pruebas de dominio y almacenamiento, build de producción y recorrido visual del flujo con y sin endpoint de IA configurado.
+- Verificación actual: 65 pruebas de dominio y almacenamiento, build de producción y recorridos visuales del alta completa, el bloqueo por aclaración y su posterior desbloqueo, con el endpoint de IA sin configurar y el fallback local activo.
 
 ## Primer tramo de contratación: propuesta_elegida → horario → seña → reservado (30 de agosto de 2026)
 

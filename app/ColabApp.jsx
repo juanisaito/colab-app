@@ -14,7 +14,8 @@ import {
 } from "./lib/storage.js";
 import {
   esCancelado, tieneProfesionalElegido, puedeRecibirActividadDeProductores,
-  puedeCancelarse, puedeEscribirEnConversacion, tieneLimiteDeMensajes,
+  puedeCancelarse, requestNeedsArtistInput,
+  puedeEscribirEnConversacion, tieneLimiteDeMensajes,
 } from "./domain/estado.js";
 import { GENRE_LABELS, detectGeneros } from "./domain/genres.js";
 import { interpretRequest } from "./domain/interpretation.js";
@@ -28,6 +29,7 @@ import {
 } from "./domain/booking.js";
 import BookingFlow from "./features/booking/BookingFlow.jsx";
 import AnimatedPrompt from "./ui/AnimatedPrompt.jsx";
+import RequestComposer from "./features/request/RequestComposer.jsx";
 
 /* ============================================================
    COLAB — prototipo navegable del flujo del artista
@@ -96,6 +98,7 @@ function Gate({ onDone }) {
   const [gateError, setGateError] = useState(null);
   const [provider, setProvider] = useState(null);
   const [email, setEmail] = useState("");
+  const [requestText, setRequestText] = useState("");
   const [name, setName] = useState("");
   const [nameFocused, setNameFocused] = useState(false);
   const artistExamples = ["Duki", "Saito", "CND", "Prize", "J4mes", "Tysan", "Dillom", "K4"];
@@ -110,7 +113,7 @@ function Gate({ onDone }) {
     setConnecting(true);
     setTimeout(() => {
       setConnecting(false);
-      setStep("name");
+      setStep("request");
     }, 600);
   }
 
@@ -120,13 +123,16 @@ function Gate({ onDone }) {
       return;
     }
     setGateError(null);
-    setStep("name");
+    setStep("request");
   }
 
   async function finishGate() {
     setSaving(true);
     setGateError(null);
-    const ok = await onDone({ name: name.trim(), provider, email: provider === "email" ? email.trim() : null });
+    const ok = await onDone(
+      { name: name.trim(), provider, email: provider === "email" ? email.trim() : null },
+      requestText.trim()
+    );
     setSaving(false);
     if (!ok) setGateError("No pudimos guardar tu perfil. Probá de nuevo.");
   }
@@ -165,13 +171,29 @@ function Gate({ onDone }) {
     );
   }
 
+  if (step === "request") {
+    return (
+      <Screen topSlot={<TextLink onClick={() => setStep(provider === "email" ? "email" : "auth")}>‹ Atrás</TextLink>}>
+        <RequestComposer
+          title="¿Qué querés hacer?"
+          text={requestText}
+          onTextChange={setRequestText}
+          onSubmit={() => setStep("name")}
+          error={gateError}
+          centered
+          fullButton
+        />
+      </Screen>
+    );
+  }
+
   return (
-    <Screen topSlot={<TextLink onClick={() => setStep("auth")}>‹ Atrás</TextLink>}>
+    <Screen topSlot={<TextLink onClick={() => setStep("request")}>‹ Atrás</TextLink>}>
       <h1 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 24, color: COLORS.text, lineHeight: 1.3, margin: "0 0 8px" }}>
-        ¿Cuál es tu nombre artístico?
+        ¿Cómo querés que te llamemos?
       </h1>
       <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13, lineHeight: 1.5, margin: "0 0 24px" }}>
-        Es el nombre con el que te van a conocer los productores.
+        Puede ser tu nombre artístico o como te dicen habitualmente.
       </p>
       <div style={{ position: "relative" }}>
         <input
@@ -192,7 +214,7 @@ function Gate({ onDone }) {
       {gateError && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, marginTop: 10 }}>{gateError}</p>}
       <div style={{ marginTop: 24 }}>
         <PrimaryButton full disabled={name.trim().length < 2 || saving} onClick={finishGate}>
-          {saving ? "Guardando…" : "Continuar"}
+          {saving ? "Preparando tu pedido…" : "Continuar"}
         </PrimaryButton>
       </div>
     </Screen>
@@ -1245,14 +1267,23 @@ export default function App() {
     return () => timers.current.forEach(clearTimeout);
   }, []);
 
-  async function handleGateDone(profileData) {
+  async function handleGateDone(profileData, initialRequestText) {
     const ok = await storageSet(PROFILE_KEY, profileData, false);
     if (!ok) return false;
+    await handleTextSubmit(initialRequestText);
     setProfile(profileData);
     return true;
   }
 
   async function handleTextSubmit(t) {
+    if (profile && !editingLiveRequestId) {
+      const requests = await getAllRequests();
+      const blockingRequest = requests.find((item) => item.artistName === profile.name && requestNeedsArtistInput(item));
+      if (blockingRequest) {
+        setError("Primero completá la aclaración del pedido que ya está en movimiento.");
+        return false;
+      }
+    }
     setText(t);
     setInterpreting(true);
     setError(null);
@@ -1263,8 +1294,10 @@ export default function App() {
       setContextReviewRequired(true);
       setEditingFromType(null);
       setStartedCreating(true);
+      return true;
     } catch (e) {
       setError("No pudimos interpretar el pedido. Probá de nuevo.");
+      return false;
     } finally {
       setInterpreting(false);
     }
