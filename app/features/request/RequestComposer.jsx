@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { EDITORIAL } from "../../theme.js";
-import { EditorialPrimaryButton, editorialUnderlineInputStyle } from "../../ui/pieces.jsx";
+import { EditorialPrimaryButton, editorialUnderlineInputStyle, EditorialThinkingDots } from "../../ui/pieces.jsx";
 import AnimatedPrompt from "../../ui/AnimatedPrompt.jsx";
 
 const REQUEST_EXAMPLES = [
@@ -89,7 +89,7 @@ export default function RequestComposer({
           <EditorialPrimaryButton full={fullButton} onClick={onBlockedAction}>Completar aclaración</EditorialPrimaryButton>
         ) : (
           <EditorialPrimaryButton full={fullButton} disabled={!canSubmit} onClick={() => onSubmit(text.trim())}>
-            {busy ? "Entendiendo…" : "Continuar"}
+            {busy ? <>Entendiendo <EditorialThinkingDots color={EDITORIAL.muted} /></> : "Continuar"}
           </EditorialPrimaryButton>
         )}
       </div>

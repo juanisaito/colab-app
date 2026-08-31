@@ -5,8 +5,10 @@ import { COLORS, EDITORIAL } from "./theme.js";
 import BottomNav from "./BottomNav.jsx";
 import { HomeScreen, OrdersScreen, MessagesScreen, ProfileScreen, HelpScreen, PrivacyScreen, EditNameScreen } from "./RootScreens.jsx";
 import {
-  PrimaryButton, SecondaryButton, TextLink, Label, UnderlineField, underlineInputStyle, Screen, ProducerPhoto, BigOption,
+  PrimaryButton, SecondaryButton, TextLink, Label, UnderlineField, Screen, ProducerPhoto, BigOption,
   EditorialPrimaryButton, EditorialSecondaryButton, EditorialTextLink, EditorialUnderlineField, editorialUnderlineInputStyle, HandDrawnUnderline,
+  EditorialLabel, EditorialBigOption, EditorialBackButton, EditorialThinkingDots,
+  DoodlePathsDiverging, DoodlePinClock, DoodleWaveform, DoodleSoundStars, DoodleCheck, DoodleSpeechBubble,
 } from "./ui/pieces.jsx";
 import { uid } from "./lib/id.js";
 import { formatMoney } from "./lib/format.js";
@@ -64,15 +66,15 @@ function AttachRow({ label, attached, busy, onToggle }) {
         width: "100%",
         background: "none",
         border: "none",
-        borderBottom: `1px solid ${COLORS.border}`,
+        borderBottom: `1px solid ${EDITORIAL.border}`,
         padding: "14px 2px",
         cursor: busy ? "default" : "pointer",
       }}
     >
-      <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 15, color: attached ? COLORS.text : COLORS.muted, fontWeight: attached ? 700 : 500 }}>
+      <span style={{ fontFamily: EDITORIAL.fontSans, fontSize: 15, color: attached ? EDITORIAL.carbon : EDITORIAL.muted, fontWeight: attached ? 700 : 500 }}>
         {label}
       </span>
-      <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: attached ? COLORS.accent : COLORS.muted }}>
+      <span style={{ fontFamily: EDITORIAL.fontMono, fontSize: 11, color: attached ? EDITORIAL.accent : EDITORIAL.muted }}>
         {busy ? "…" : attached ? "✓ adjuntado" : "Adjuntar"}
       </span>
     </button>
@@ -174,7 +176,7 @@ function Gate({ onDone }) {
 
   if (step === "email") {
     return (
-      <Screen topSlot={<EditorialTextLink onClick={() => setStep("auth")}>‹ Atrás</EditorialTextLink>}>
+      <Screen topSlot={<EditorialBackButton onClick={() => setStep("auth")} />}>
         <h1 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 700, fontSize: 28, color: EDITORIAL.carbon, lineHeight: 1.3, margin: "0 0 22px" }}>¿Cuál es tu mail?</h1>
         <EditorialUnderlineField value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="vos@ejemplo.com" autoFocus onKeyDown={(e) => e.key === "Enter" && continueWithEmail()} />
         {gateError && <p style={{ color: EDITORIAL.error, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, marginTop: 10 }}>{gateError}</p>}
@@ -185,7 +187,7 @@ function Gate({ onDone }) {
 
   if (step === "request") {
     return (
-      <Screen topSlot={<EditorialTextLink onClick={() => setStep(provider === "email" ? "email" : "auth")}>‹ Atrás</EditorialTextLink>}>
+      <Screen topSlot={<EditorialBackButton onClick={() => setStep(provider === "email" ? "email" : "auth")} />}>
         <RequestComposer
           title="¿Qué querés hacer?"
           text={requestText}
@@ -200,7 +202,7 @@ function Gate({ onDone }) {
   }
 
   return (
-    <Screen topSlot={<EditorialTextLink onClick={() => setStep("request")}>‹ Atrás</EditorialTextLink>}>
+    <Screen topSlot={<EditorialBackButton onClick={() => setStep("request")} />}>
       <h1 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 700, fontSize: 28, color: EDITORIAL.carbon, lineHeight: 1.3, margin: "0 0 8px" }}>
         ¿Cómo querés que te llamemos?
       </h1>
@@ -250,27 +252,28 @@ function StartScreen({ onSubmit, interpreting, error, initialText, onExit, exitL
 
   return (
     <Screen
+      className="q-fade"
       topSlot={
         !onExit ? null : confirmingExit ? (
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 13, color: COLORS.muted }}>¿Salir sin guardar tu pedido?</span>
-            <TextLink onClick={onExit}>Sí, salir</TextLink>
-            <TextLink onClick={() => setConfirmingExit(false)}>Seguir</TextLink>
+            <span style={{ fontFamily: EDITORIAL.fontSans, fontSize: 13, color: EDITORIAL.muted }}>¿Salir sin guardar tu pedido?</span>
+            <EditorialTextLink onClick={onExit}>Sí, salir</EditorialTextLink>
+            <EditorialTextLink onClick={() => setConfirmingExit(false)}>Seguir</EditorialTextLink>
           </div>
         ) : (
-          <TextLink onClick={handleExitClick}>{exitLabel}</TextLink>
+          <EditorialTextLink onClick={handleExitClick}>{exitLabel}</EditorialTextLink>
         )
       }
     >
-      <h1 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 27, color: COLORS.text, lineHeight: 1.2, margin: "0 0 8px" }}>
+      <h1 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 28, color: EDITORIAL.carbon, lineHeight: 1.2, letterSpacing: -0.3, margin: "0 0 8px" }}>
         Tu próxima canción, en marcha.
       </h1>
-      <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, margin: "0 0 26px" }}>
+      <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13.5, lineHeight: 1.5, margin: "0 0 26px" }}>
         Encontramos a quién puede resolverlo con vos.
       </p>
 
       {/* Punto 6: entrada principal visible, no solo un placeholder que desaparece. */}
-      <Label>¿Qué querés hacer?</Label>
+      <EditorialLabel>¿Qué querés hacer?</EditorialLabel>
 
       <div style={{ position: "relative", marginTop: 4 }}>
         <textarea
@@ -285,28 +288,50 @@ function StartScreen({ onSubmit, interpreting, error, initialText, onExit, exitL
           aria-label="Contanos qué querés hacer"
           rows={2}
           disabled={interpreting}
-          style={{ ...underlineInputStyle, position: "relative", zIndex: 2, resize: "none", lineHeight: 1.45, height: 64, minHeight: 64, maxHeight: 104, overflowY: "auto" }}
+          style={{ ...editorialUnderlineInputStyle, position: "relative", zIndex: 2, resize: "none", lineHeight: 1.45, height: 64, minHeight: 64, maxHeight: 104, overflowY: "auto" }}
         />
-        {text.length === 0 && (
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, padding: "8px 0", pointerEvents: "none", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 17, lineHeight: 1.5 }}>
-            <AnimatedPrompt examples={examples} />
+        {text.length === 0 && !focused && (
+          <div className="q-fade" style={{ position: "absolute", top: 0, left: 0, right: 0, padding: "8px 0", pointerEvents: "none", fontFamily: EDITORIAL.fontSans, fontSize: 17, lineHeight: 1.5 }}>
+            <AnimatedPrompt examples={examples} color={EDITORIAL.muted} />
           </div>
         )}
-        <div style={{ height: 1, background: focused ? COLORS.accent : COLORS.border, transition: "background .15s ease" }} />
+        <div style={{ height: 1.5, background: focused ? EDITORIAL.carbon : EDITORIAL.border, transition: "background .15s ease" }} />
       </div>
 
-      {error && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, marginTop: 10 }}>{error}</p>}
+      {error && <p style={{ color: EDITORIAL.error, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, marginTop: 10 }}>{error}</p>}
+
+      {interpreting && (
+        <p style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5, marginTop: 10 }}>
+          Interpretando tu pedido <EditorialThinkingDots />
+        </p>
+      )}
 
       <div style={{ marginTop: 30 }}>
-        <PrimaryButton full disabled={text.trim().length < 3 || interpreting} onClick={() => onSubmit(text.trim())}>
+        <EditorialPrimaryButton full disabled={text.trim().length < 3 || interpreting} onClick={() => onSubmit(text.trim())}>
           Continuar
-        </PrimaryButton>
+        </EditorialPrimaryButton>
       </div>
     </Screen>
   );
 }
 
 /* ---------------- pantalla: preguntas de contexto ---------------- */
+
+const DEFAULT_CLARIFICATION_QUESTION = "¿Qué día y horario te queda bien?";
+const MAX_CLARIFICATION_QUESTION_LENGTH = 140;
+
+// Nombre de contrato acordado para cuando la interpretación (hoy el
+// fallback local, más adelante una IA real) pueda sugerir su propia
+// pregunta de aclaración: classification.clarificationQuestion. Este
+// componente no sabe nada de qué la generó — sólo valida la forma antes de
+// mostrarla, y conserva la pregunta por defecto ante cualquier valor
+// ausente o defectuoso, para que una respuesta rota nunca rompa la pantalla.
+function resolveClarificationQuestion(raw) {
+  if (typeof raw !== "string") return DEFAULT_CLARIFICATION_QUESTION;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > MAX_CLARIFICATION_QUESTION_LENGTH) return DEFAULT_CLARIFICATION_QUESTION;
+  return trimmed;
+}
 
 function ContextStep({ classification, initialContext, reviewExisting, onComplete, onBack }) {
   const { tipo, modalidad, modalidad_fuente, datos_faltantes, locationText, timeSlot, referencia: referenciaTexto } = classification;
@@ -316,13 +341,17 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   const initialLocation = initialContext?.ubicacion ?? locationText ?? null;
   const [ubicacion, setUbicacion] = useState(initialLocation);
   const [coordinates, setCoordinates] = useState(initialContext?.coordinates || null);
-  const [ubicacionModo, setUbicacionModo] = useState(
-    initialLocation === "Cerca mío" ? initialLocation : initialLocation ? "Elegir zona" : null
-  );
   const zoneOptions = ["Palermo", "Villa Crespo", "Almagro", "Colegiales", "Belgrano", "Caballito", "Chacarita"];
   const animatedZoneExamples = ["Palermo", "Belgrano", "Villa Crespo", "Almagro", "Colegiales", "Caballito", "Chacarita", "Boedo"];
-  const [customZoneVisible, setCustomZoneVisible] = useState(!!initialLocation && initialLocation !== "Cerca mío" && !zoneOptions.includes(initialLocation));
-  const [locationPermissionPrompt, setLocationPermissionPrompt] = useState(false);
+  // Modo de ubicación: sólo decide qué panel mostrar. La única fuente de
+  // verdad de CUÁL es la selección efectiva (para el único punto naranja)
+  // sigue siendo `ubicacion` — nunca se persiste este estado en sí mismo.
+  const [locationMode, setLocationMode] = useState(() => {
+    if (initialLocation === "Cerca mío") return "aproximada";
+    if (initialLocation && zoneOptions.includes(initialLocation)) return "elegir_zona";
+    if (initialLocation) return "otra_zona";
+    return null;
+  });
   const [timeSlots, setTimeSlots] = useState(() => {
     const fromContext = normalizeTimeSlots(initialContext);
     if (fromContext.length > 0) return fromContext;
@@ -335,7 +364,10 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   // ahora elegir la primera franja ya no debe avanzar la pantalla sola.
   const [locationReviewed, setLocationReviewed] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [zoneInputFocused, setZoneInputFocused] = useState(false);
   const [locationError, setLocationError] = useState(null);
+  // "denied" | "unavailable" | "timeout" | "unsupported" | "generic" | null
+  const [locationErrorKind, setLocationErrorKind] = useState(null);
   const [datoFaltanteTexto, setDatoFaltanteTexto] = useState(initialContext?.datoFaltanteTexto ?? "");
   const [datoFaltanteConfirmado, setDatoFaltanteConfirmado] = useState(!!initialContext?.datoFaltanteConfirmado && !reviewExisting);
 
@@ -425,24 +457,46 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
     }, 700);
   }
 
-  function chooseLocationMode(option) {
-    setUbicacionModo(option);
+  // Las tres opciones de nivel superior son mutuamente excluyentes: elegir
+  // una limpia el valor de `ubicacion` sólo si pertenecía al modo anterior,
+  // para no perder una selección real al simplemente pasar por otro modo.
+  function chooseAproximada() {
+    setLocationMode("aproximada");
     setLocationError(null);
-    if (option === "Elegir zona") {
+    setLocationErrorKind(null);
+    if (ubicacion !== "Cerca mío") {
+      setUbicacion(null);
       setCoordinates(null);
-      setLocationPermissionPrompt(false);
-      if (ubicacion === "Cerca mío") setUbicacion(null);
-      return;
     }
-    setUbicacion(null);
-    setCoordinates(null);
-    setCustomZoneVisible(false);
-    setLocationPermissionPrompt(true);
   }
 
+  function chooseElegirZona() {
+    setLocationMode("elegir_zona");
+    setLocationError(null);
+    setLocationErrorKind(null);
+    setCoordinates(null);
+    if (!zoneOptions.includes(ubicacion)) setUbicacion(null);
+  }
+
+  function chooseOtraZona() {
+    setLocationMode("otra_zona");
+    setLocationError(null);
+    setLocationErrorKind(null);
+    setCoordinates(null);
+    if (ubicacion === "Cerca mío" || zoneOptions.includes(ubicacion)) setUbicacion(null);
+  }
+
+  // Distingue el resultado real de la geolocalización: permiso denegado o
+  // API no soportada no vuelven a ofrecer el mismo botón (no tiene sentido
+  // reintentar algo que no va a cambiar) — timeout o un error temporal sí
+  // permiten reintentar, y en los dos casos la alternativa manual sigue
+  // disponible y no bloquea el flujo.
   function requestCurrentLocation() {
+    setLocationError(null);
+    setLocationErrorKind(null);
     if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setLocationError("No pudimos acceder a tu ubicación. Podés elegir una zona manualmente.");
+      setLocationError("Tu navegador no admite ubicación automática acá.");
+      setLocationErrorKind("unsupported");
       return;
     }
     setLocating(true);
@@ -450,12 +504,24 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
       (position) => {
         setCoordinates({ lat: position.coords.latitude, lng: position.coords.longitude });
         setUbicacion("Cerca mío");
-        setLocationPermissionPrompt(false);
         setLocating(false);
       },
-      () => {
-        setLocationError("No pudimos acceder a tu ubicación. Podés elegir una zona manualmente.");
+      (err) => {
         setLocating(false);
+        const code = err && err.code;
+        if (code === 1) {
+          setLocationError("No nos diste permiso para acceder a tu ubicación.");
+          setLocationErrorKind("denied");
+        } else if (code === 2) {
+          setLocationError("No pudimos determinar tu ubicación en este momento.");
+          setLocationErrorKind("unavailable");
+        } else if (code === 3) {
+          setLocationError("La búsqueda de ubicación tardó demasiado.");
+          setLocationErrorKind("timeout");
+        } else {
+          setLocationError("No pudimos acceder a tu ubicación.");
+          setLocationErrorKind("generic");
+        }
       },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
     );
@@ -464,16 +530,10 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   function selectZone(zone) {
     setCoordinates(null);
     setLocationError(null);
-    if (zone === "Otra zona") {
-      setCustomZoneVisible(true);
-      setUbicacion(null);
-      return;
-    }
-    setCustomZoneVisible(false);
     setUbicacion(zone);
   }
 
-  const qHeading = { fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 22, color: COLORS.text, margin: "0 0 22px", lineHeight: 1.3 };
+  const qHeading = { fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 24, color: EDITORIAL.carbon, margin: 0, lineHeight: 1.25, letterSpacing: -0.2 };
   const hayAlgunaReferencia = referenciaLink.trim() || archivoAdjunto || audioAdjunto;
   const genreOptions = [
     ["Urbano", "urbano"], ["Trap", "trap"], ["Reggaetón", "reggaeton"], ["Pop", "pop"],
@@ -483,23 +543,37 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
     if (value === "no_se") return setGeneros(generos.includes("no_se") ? [] : ["no_se"]);
     setGeneros((current) => current.includes(value) ? current.filter((g) => g !== value) : [...current.filter((g) => g !== "no_se"), value]);
   }
+  // Placeholder de hoy: el fallback local todavía no manda una pregunta
+  // puntual (classification.clarificationQuestion queda undefined), así que
+  // esto resuelve siempre a la pregunta por defecto sin cambiar nada visible.
+  const aclaracionPregunta = resolveClarificationQuestion(classification.clarificationQuestion);
+  // Encabezado de cada fase: título + a lo sumo un doodle editorial, nunca
+  // dentro de una opción individual.
+  function PhaseHeading({ children, doodle }) {
+    return (
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 22 }}>
+        <h2 style={qHeading}>{children}</h2>
+        {doodle}
+      </div>
+    );
+  }
 
   return (
-    <Screen topSlot={<TextLink onClick={onBack}>‹ Atrás</TextLink>}>
+    <Screen className="q-fade" topSlot={<EditorialBackButton onClick={onBack} />}>
       <div key={phase} className="q-fade">
         {phase === "modalidad" && (
           <>
-            <h2 style={qHeading}>¿Cómo preferís hacerlo?</h2>
+            <PhaseHeading doodle={<DoodlePathsDiverging width={44} />}>¿Cómo preferís hacerlo?</PhaseHeading>
             <div>
               {["Presencial", "Online", "Puedo de las dos formas"].map((op) => {
                 const val = op === "Presencial" ? "presencial" : op === "Online" ? "online" : "me_da_igual";
-                return <BigOption key={op} label={op} selected={modalidadElegida === val} onClick={() => {
+                return <EditorialBigOption key={op} label={op} selected={modalidadElegida === val} onClick={() => {
                   setModalidadElegida(val);
                   setModalidadReviewed(true);
                   if (val !== "presencial") {
                     setUbicacion(null);
                     setCoordinates(null);
-                    setFranja(null);
+                    setTimeSlots([]);
                   }
                 }} />;
               })}
@@ -509,62 +583,106 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
 
         {phase === "ubicacion_franja" && (
           <>
-            <h2 style={qHeading}>Ubicación y horario</h2>
+            <PhaseHeading doodle={<DoodlePinClock width={44} />}>Ubicación y horario</PhaseHeading>
             <div style={{ marginBottom: 22 }}>
-              <Label>Ubicación</Label>
+              <EditorialLabel>Ubicación</EditorialLabel>
+              <p style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 600, color: EDITORIAL.carbon, fontSize: 15, lineHeight: 1.4, margin: "-2px 0 12px" }}>
+                ¿En qué zona te sirve trabajar?
+              </p>
               <div>
-                {["Cerca mío", "Elegir zona"].map((op) => (
-                  <BigOption
-                    key={op}
-                    label={op === "Cerca mío" && locating ? "Ubicando…" : op}
-                    selected={ubicacionModo === op}
-                    onClick={() => chooseLocationMode(op)}
-                  />
-                ))}
+                <EditorialBigOption
+                  label="Usar mi ubicación aproximada"
+                  selected={ubicacion === "Cerca mío"}
+                  onClick={chooseAproximada}
+                />
+                <EditorialBigOption
+                  label="Elegir barrio o zona"
+                  selected={false}
+                  onClick={chooseElegirZona}
+                />
+                <EditorialBigOption
+                  label="Otra zona"
+                  selected={locationMode === "otra_zona" && !!ubicacion}
+                  onClick={chooseOtraZona}
+                />
               </div>
-              {ubicacionModo === "Cerca mío" && locationPermissionPrompt && (
-                <div style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 4, padding: 12, marginTop: 10 }}>
-                  <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12.5, lineHeight: 1.45, margin: "0 0 10px" }}>
-                    Activá tu ubicación para mostrarte estudios y productores cerca.
-                  </p>
-                  <SecondaryButton full disabled={locating} onClick={requestCurrentLocation}>{locating ? "ubicando…" : "activar ubicación"}</SecondaryButton>
-                </div>
-              )}
-              {ubicacionModo === "Elegir zona" && (
-                <div style={{ marginTop: 10 }}>
-                  <div>
-                    {[...zoneOptions, "Otra zona"].map((zone) => (
-                      <BigOption key={zone} label={zone} selected={zone === "Otra zona" ? customZoneVisible : ubicacion === zone} onClick={() => selectZone(zone)} />
-                    ))}
-                  </div>
-                  {customZoneVisible && (
-                    <div style={{ marginTop: 10, position: "relative" }}>
-                      <input
-                        value={ubicacion || ""}
-                        onChange={(e) => { setUbicacion(e.target.value); setCoordinates(null); }}
-                        autoFocus
-                        style={{ ...underlineInputStyle, position: "relative", zIndex: 2, fontSize: 14.5 }}
-                      />
-                      {!ubicacion && (
-                        <div style={{ position: "absolute", inset: "8px 0 auto", pointerEvents: "none", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 14.5 }}>
-                          <AnimatedExamples examples={animatedZoneExamples} />
-                        </div>
-                      )}
-                      <div style={{ height: 1, background: COLORS.accent }} />
+
+              {locationMode === "aproximada" && (
+                <div style={{ background: EDITORIAL.surface, border: `1px solid ${EDITORIAL.border}`, padding: 12, marginTop: 10 }}>
+                  {locating && (
+                    <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5, lineHeight: 1.45, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                      Buscando ubicación<EditorialThinkingDots />
+                    </p>
+                  )}
+                  {!locating && ubicacion === "Cerca mío" && (
+                    <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.accent, fontWeight: 700, fontSize: 12.5, margin: "0 0 8px" }}>
+                      Ubicación detectada
+                    </p>
+                  )}
+                  {!locating && ubicacion !== "Cerca mío" && locationError && (
+                    <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.error, fontSize: 12.5, lineHeight: 1.45, margin: "0 0 8px" }}>
+                      {locationError}
+                    </p>
+                  )}
+                  {!locating && (
+                    <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12, lineHeight: 1.45, margin: ubicacion === "Cerca mío" ? 0 : "0 0 10px" }}>
+                      Usamos una zona aproximada para buscar profesionales cerca. No compartimos tu dirección exacta.
+                    </p>
+                  )}
+                  {!locating && ubicacion !== "Cerca mío" && (locationErrorKind === "denied" || locationErrorKind === "unsupported") && (
+                    <div style={{ marginTop: 10 }}>
+                      <EditorialSecondaryButton full onClick={chooseElegirZona}>Elegir zona manualmente</EditorialSecondaryButton>
+                    </div>
+                  )}
+                  {!locating && ubicacion !== "Cerca mío" && (locationErrorKind === "timeout" || locationErrorKind === "generic") && (
+                    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+                      <EditorialSecondaryButton full onClick={requestCurrentLocation}>Reintentar ubicación</EditorialSecondaryButton>
+                      <EditorialTextLink onClick={chooseElegirZona}>Elegir zona manualmente</EditorialTextLink>
+                    </div>
+                  )}
+                  {!locating && ubicacion !== "Cerca mío" && !locationErrorKind && (
+                    <div style={{ marginTop: 10 }}>
+                      <EditorialSecondaryButton full onClick={requestCurrentLocation}>Activar ubicación</EditorialSecondaryButton>
                     </div>
                   )}
                 </div>
               )}
-              {locationError && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12, lineHeight: 1.4, margin: "10px 0 0" }}>{locationError}</p>}
+
+              {locationMode === "elegir_zona" && (
+                <div style={{ marginTop: 10 }}>
+                  {zoneOptions.map((zone) => (
+                    <EditorialBigOption key={zone} label={zone} selected={ubicacion === zone} onClick={() => selectZone(zone)} />
+                  ))}
+                </div>
+              )}
+
+              {locationMode === "otra_zona" && (
+                <div style={{ marginTop: 10, position: "relative" }}>
+                  <input
+                    value={ubicacion || ""}
+                    onChange={(e) => { setUbicacion(e.target.value); setCoordinates(null); }}
+                    onFocus={() => setZoneInputFocused(true)}
+                    onBlur={() => setZoneInputFocused(false)}
+                    autoFocus
+                    style={{ ...editorialUnderlineInputStyle, position: "relative", zIndex: 2, fontSize: 14.5 }}
+                  />
+                  {!ubicacion && !zoneInputFocused && (
+                    <div className="q-fade" style={{ position: "absolute", inset: "8px 0 auto", pointerEvents: "none", fontFamily: EDITORIAL.fontSans, fontSize: 14.5 }}>
+                      <AnimatedPrompt examples={animatedZoneExamples} color={EDITORIAL.muted} />
+                    </div>
+                  )}
+                  <div style={{ height: 1.5, background: EDITORIAL.carbon }} />
+                </div>
+              )}
             </div>
             <div>
-              <Label>Horario</Label>
-              <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12, lineHeight: 1.4, margin: "-4px 0 10px" }}>
+              <EditorialLabel>Horario</EditorialLabel>
+              <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12, lineHeight: 1.4, margin: "-4px 0 10px" }}>
                 Podés elegir hasta dos opciones
               </p>
               <div>
                 {TIME_SLOT_OPTIONS.map((op) => (
-                  <BigOption
+                  <EditorialBigOption
                     key={op}
                     label={op}
                     selected={timeSlots.includes(op)}
@@ -572,7 +690,7 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
                     onClick={() => setTimeSlots((current) => toggleTimeSlot(current, op))}
                   />
                 ))}
-                <BigOption
+                <EditorialBigOption
                   label={FLEXIBLE_TIME_SLOT}
                   selected={timeSlots.includes(FLEXIBLE_TIME_SLOT)}
                   onClick={() => setTimeSlots((current) => toggleTimeSlot(current, FLEXIBLE_TIME_SLOT))}
@@ -581,7 +699,7 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
             </div>
             {ubicacion && timeSlots.length > 0 && !locationReviewed && (
               <div style={{ marginTop: 22 }}>
-                <PrimaryButton full onClick={() => setLocationReviewed(true)}>Continuar</PrimaryButton>
+                <EditorialPrimaryButton full onClick={() => setLocationReviewed(true)}>Continuar</EditorialPrimaryButton>
               </div>
             )}
           </>
@@ -589,20 +707,33 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
 
         {phase === "dato_faltante" && (
           <>
-            <h2 style={qHeading}>¿Qué día y horario te queda bien?</h2>
-            <UnderlineField value={datoFaltanteTexto} onChange={(e) => setDatoFaltanteTexto(e.target.value)} placeholder="Ej: sábado a la noche" autoFocus />
+            <PhaseHeading doodle={<DoodleSpeechBubble width={40} />}>Necesitamos una aclaración</PhaseHeading>
+
+            <EditorialLabel>Tu pedido</EditorialLabel>
+            <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 14.5, lineHeight: 1.5, fontStyle: "italic", margin: "0 0 20px" }}>
+              “{classification.originalText}”
+            </p>
+
+            <div style={{ height: 1, background: EDITORIAL.border, margin: "0 0 20px" }} />
+
+            <EditorialLabel>Una cosa más</EditorialLabel>
+            <p style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 700, color: EDITORIAL.carbon, fontSize: 17, lineHeight: 1.35, margin: "0 0 18px" }}>
+              {aclaracionPregunta}
+            </p>
+
+            <EditorialUnderlineField value={datoFaltanteTexto} onChange={(e) => setDatoFaltanteTexto(e.target.value)} placeholder="Ej: sábado a la noche" autoFocus />
             <div style={{ marginTop: 26 }}>
-              <PrimaryButton full disabled={datoFaltanteTexto.trim().length === 0} onClick={() => setDatoFaltanteConfirmado(true)}>
+              <EditorialPrimaryButton full disabled={datoFaltanteTexto.trim().length === 0} onClick={() => setDatoFaltanteConfirmado(true)}>
                 Continuar
-              </PrimaryButton>
+              </EditorialPrimaryButton>
             </div>
           </>
         )}
 
         {phase === "referencia" && (
           <>
-            <h2 style={qHeading}>Maqueta o referencia</h2>
-            <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, margin: "0 0 20px" }}>
+            <PhaseHeading doodle={<DoodleWaveform width={48} />}>Maqueta o referencia</PhaseHeading>
+            <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13.5, lineHeight: 1.5, margin: "0 0 20px" }}>
               La usamos para entender sonido, clima y referencias. Después te mostramos qué entendimos para que puedas confirmarlo o cambiarlo.
             </p>
 
@@ -610,26 +741,26 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
             <AttachRow label={archivoNombre || "Adjuntar archivo del artista"} attached={archivoAdjunto} busy={adjuntando === "archivo"} onToggle={toggleArchivo} />
             <AttachRow label="Grabar audio" attached={audioAdjunto} busy={adjuntando === "audio"} onToggle={toggleAudio} />
             <div style={{ marginTop: 14 }}>
-              <UnderlineField value={referenciaLink} onChange={(e) => setReferenciaLink(e.target.value)} placeholder="O pegá un enlace (Spotify, etc.)" small />
+              <EditorialUnderlineField value={referenciaLink} onChange={(e) => setReferenciaLink(e.target.value)} placeholder="O pegá un enlace (Spotify, etc.)" small />
             </div>
 
-            <button onClick={() => setShowProtection((v) => !v)} style={{ background: "none", border: "none", padding: "14px 0 0", color: COLORS.muted, fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, textDecoration: "underline", textUnderlineOffset: 3, cursor: "pointer" }}>
+            <button onClick={() => setShowProtection((v) => !v)} style={{ background: "none", border: "none", padding: "14px 0 0", color: EDITORIAL.muted, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, textDecoration: "underline", textUnderlineOffset: 3, cursor: "pointer" }}>
               {showProtection ? "Ocultar" : "Cómo cuidamos tu material"}
             </button>
             {showProtection && (
-              <div style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 12, marginTop: 10 }}>
-                <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 12.5, lineHeight: 1.5, margin: 0 }}>
+              <div style={{ background: EDITORIAL.surface, border: `1px solid ${EDITORIAL.border}`, padding: 12, marginTop: 10 }}>
+                <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 12.5, lineHeight: 1.5, margin: 0 }}>
                   No se publica en tu perfil. Sólo debería verlo la gente invitada a este pedido y COLAB no adquiere derechos sobre tu obra. En este prototipo el archivo no sale de tu dispositivo: guardamos únicamente su nombre.
                 </p>
               </div>
             )}
 
             <div style={{ marginTop: 26 }}>
-              <PrimaryButton full onClick={() => setReferenciaConfirmada(true)}>
+              <EditorialPrimaryButton full onClick={() => setReferenciaConfirmada(true)}>
                 {hayAlgunaReferencia ? "Continuar" : "Continuar sin agregar nada"}
-              </PrimaryButton>
+              </EditorialPrimaryButton>
               {!hayAlgunaReferencia && (
-                <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 11.5, lineHeight: 1.45, textAlign: "center", margin: "10px 12px 0" }}>
+                <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 11.5, lineHeight: 1.45, textAlign: "center", margin: "10px 12px 0" }}>
                   Sin una referencia, puede llevarnos un poco más de tiempo encontrar productores que encajen.
                 </p>
               )}
@@ -639,17 +770,19 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
 
         {phase === "generos" && (
           <>
-            <h2 style={qHeading}>{generosInferidos.length > 0 ? "¿Va por acá?" : "¿Por dónde va tu música?"}</h2>
-            <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, margin: "-10px 0 18px" }}>
+            <PhaseHeading doodle={<DoodleSoundStars width={42} />}>
+              {generosInferidos.length > 0 ? "¿Va por acá?" : "¿Por dónde va tu música?"}
+            </PhaseHeading>
+            <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13.5, lineHeight: 1.5, margin: "-10px 0 18px" }}>
               {generosInferidos.length > 0
                 ? `Detectamos ${generosInferidos.map((genre) => GENRE_LABELS[genre]).join(" y ")}. Confirmalo o cambialo antes de seguir.`
                 : "Elegí todos los que quieras. Nos ayuda a acercarte productores, no te encasilla."}
             </p>
             <div>
-              {genreOptions.map(([label, value]) => <BigOption key={value} label={label} selected={generos.includes(value)} onClick={() => toggleGenero(value)} />)}
+              {genreOptions.map(([label, value]) => <EditorialBigOption key={value} label={label} selected={generos.includes(value)} onClick={() => toggleGenero(value)} />)}
             </div>
             <div style={{ marginTop: 26 }}>
-              <PrimaryButton full disabled={generos.length === 0} onClick={() => setGenerosConfirmados(true)}>Continuar</PrimaryButton>
+              <EditorialPrimaryButton full disabled={generos.length === 0} onClick={() => setGenerosConfirmados(true)}>Continuar</EditorialPrimaryButton>
             </div>
           </>
         )}
@@ -678,39 +811,44 @@ function SummaryScreen({ classification, context, onEdit, onPublish, publishing,
   const generosTexto = (context.generos || []).map((g) => genreLabels[g] || g).join(" · ");
 
   return (
-    <Screen topSlot={<TextLink onClick={onEdit}>‹ Atrás</TextLink>}>
-      <Label>{title}</Label>
-      <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 16.5, lineHeight: 1.5, margin: "0 0 12px" }}>{summary}</p>
-      {refTexto && <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13, margin: "0 0 6px" }}>Referencia: {refTexto}</p>}
-      {generosTexto && <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13, margin: "0 0 6px" }}>Géneros: {generosTexto}</p>}
+    <Screen className="q-fade" topSlot={<EditorialBackButton onClick={onEdit} />}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <EditorialLabel>{title}</EditorialLabel>
+        <DoodleCheck width={30} />
+      </div>
+      <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 16.5, lineHeight: 1.5, margin: "0 0 12px" }}>{summary}</p>
+      {refTexto && <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: "0 0 6px" }}>Referencia: {refTexto}</p>}
+      {generosTexto && <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: "0 0 6px" }}>Géneros: {generosTexto}</p>}
       {detalles.length > 0 && (
-        <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13, margin: 0 }}>{detalles.join(" · ")}</p>
+        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: 0 }}>{detalles.join(" · ")}</p>
       )}
 
-      <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12, lineHeight: 1.4, marginTop: 22 }}>
+      <div style={{ height: 1, background: EDITORIAL.border, margin: "22px 0" }} />
+
+      <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12, lineHeight: 1.4, margin: 0 }}>
         Tu texto original: “{originalText}”
       </p>
 
       {usedFallback && (
-        <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 11.5, lineHeight: 1.4, marginTop: 10 }}>
+        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 11.5, lineHeight: 1.4, marginTop: 10 }}>
           No pudimos usar la interpretación asistida esta vez — usamos una versión simplificada. Revisá que esté bien antes de publicar.
         </p>
       )}
       {publishError && (
-        <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, marginTop: 14 }}>
+        <p style={{ color: EDITORIAL.error, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, marginTop: 14 }}>
           {editing ? "No pudimos actualizar tu pedido. Probá de nuevo." : "No pudimos publicar tu pedido. Probá de nuevo."}
         </p>
       )}
       {editing && (
-        <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 11.5, lineHeight: 1.45, marginTop: 10 }}>
+        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 11.5, lineHeight: 1.45, marginTop: 10 }}>
           Al actualizar, las conversaciones y propuestas que ya tenías se cierran y volvemos a buscar productores con los datos nuevos.
         </p>
       )}
 
       <div style={{ marginTop: 26 }}>
-        <PrimaryButton full disabled={publishing} onClick={onPublish}>
+        <EditorialPrimaryButton full disabled={publishing} onClick={onPublish}>
           {publishing ? (editing ? "Actualizando…" : "Publicando…") : editing ? "Actualizar pedido" : "Publicar pedido"}
-        </PrimaryButton>
+        </EditorialPrimaryButton>
       </div>
     </Screen>
   );
@@ -1869,6 +2007,12 @@ export default function App() {
   // cubre una recarga a mitad de camino o una interpretación que falló justo
   // después de guardar el perfil, sin interrumpir a alguien que ya está dentro
   // del flujo de contexto/resumen avanzando hacia su primera publicación.
+  // true sólo para las tres pantallas del flujo de creación/edición de un
+  // pedido (StartScreen, ContextStep, SummaryScreen) — nunca para
+  // WaitingScreen ni el resto de la app. Se fija explícitamente dentro de
+  // cada una de esas tres ramas de `body`, en vez de recalcularse con una
+  // condición aparte que podría desincronizarse de cuál pantalla se eligió.
+  let creationFlowActive = false;
   let body = null;
   if (profile === undefined || (profile && hasPublishedRequest === undefined)) {
     body = null;
@@ -1916,6 +2060,7 @@ export default function App() {
       />
     );
   } else if (classification && context && !contextReviewRequired) {
+    creationFlowActive = true;
     body = (
       <SummaryScreen
         classification={classification}
@@ -1928,10 +2073,12 @@ export default function App() {
       />
     );
   } else if (classification) {
+    creationFlowActive = true;
     body = <ContextStep classification={classification} initialContext={context} reviewExisting={reviewingEdit} onComplete={handleContextComplete} onBack={goBackToStart} />;
   } else if (startedCreating) {
     // Se volvió al primer paso (texto libre) desde ContextStep, editando un
     // pedido existente o re-escribiendo uno nuevo antes de reclasificar.
+    creationFlowActive = true;
     body = (
       <StartScreen
         onSubmit={handleTextSubmit}
@@ -1980,7 +2127,7 @@ export default function App() {
   // Piloto visual "estudio editorial": Gate (sin perfil todavía) e Inicio
   // (sin ningún otro flujo abierto) usan el chrome claro nuevo; el resto de
   // las pestañas y pantallas conserva el chrome oscuro sin ningún cambio.
-  const editorialChrome = profile === null || (hasPublishedRequest === false && !inFlowMode) || (!!profile && activeTab === "inicio" && !inFlowMode);
+  const editorialChrome = profile === null || (hasPublishedRequest === false && !inFlowMode) || creationFlowActive || (!!profile && activeTab === "inicio" && !inFlowMode);
   const chrome = editorialChrome
     ? { bg: EDITORIAL.bg, border: EDITORIAL.border, accent: EDITORIAL.accent, fontMono: EDITORIAL.fontMono }
     : { bg: COLORS.bg, border: COLORS.border, accent: COLORS.accent, fontMono: "'IBM Plex Mono', monospace" };
@@ -2016,12 +2163,15 @@ export default function App() {
           .press:active { opacity: .7; }
           .offer-in { animation: offerIn .25s ease; }
           @keyframes offerIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-          .q-fade { animation: qFade .2s ease; }
+          .q-fade { animation: qFade .16s ease; }
           @keyframes qFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
           .blink-caret { animation: blink 1s step-end infinite; color: ${chrome.accent}; }
           @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+          .thinking-dot { display: inline-block; animation: thinkingPulse 1s ease-in-out infinite; }
+          @keyframes thinkingPulse { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
           @media (prefers-reduced-motion: reduce) {
-            .press, .offer-in, .q-fade, .blink-caret { animation: none !important; transition: none !important; }
+            .press, .offer-in, .q-fade, .blink-caret, .thinking-dot { animation: none !important; transition: none !important; }
+            .thinking-dot { opacity: .6 !important; }
           }
         `}</style>
 
