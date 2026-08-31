@@ -4,6 +4,8 @@
 // (leer todo, buscar por id, mapear y volver a guardar) en cada acción de
 // ColabApp.jsx.
 
+import { normalizeTimeSlots } from "../domain/timeSlots.js";
+
 export const PROFILE_KEY = "colab-preview-profile-v3";
 export const REQUESTS_KEY = "colab-preview-requests-v3";
 
@@ -79,6 +81,23 @@ export async function migrateLegacyClosedRequests() {
     if (r.estado !== "cerrado") return r;
     changed = true;
     return { ...r, estado: "propuesta_elegida" };
+  });
+  if (changed) await saveRequests(migrated);
+}
+
+// Migración idempotente: los pedidos guardados antes de admitir dos franjas
+// horarias sólo tienen `franja` (string suelto, con la capitalización que
+// haya quedado guardada). Les agrega `timeSlots` (array) canonicalizado con
+// normalizeTimeSlots — no un envoltorio ciego de `franja` — sin tocar
+// `franja` ni ningún otro campo. Un pedido que ya tiene `timeSlots` no se
+// reescribe.
+export async function migrateLegacyTimeSlots() {
+  const all = await getAllRequests();
+  let changed = false;
+  const migrated = all.map((r) => {
+    if (Array.isArray(r.timeSlots)) return r;
+    changed = true;
+    return { ...r, timeSlots: normalizeTimeSlots(r) };
   });
   if (changed) await saveRequests(migrated);
 }

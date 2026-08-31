@@ -13,7 +13,7 @@ import { formatMoney } from "./lib/format.js";
 import {
   PROFILE_KEY, storageGet, storageSet,
   getAllRequests, getRequestById, updateRequestById, saveRequests,
-  migrateLegacyClosedRequests,
+  migrateLegacyClosedRequests, migrateLegacyTimeSlots,
 } from "./lib/storage.js";
 import {
   esCancelado, tieneProfesionalElegido, puedeRecibirActividadDeProductores,
@@ -25,6 +25,10 @@ import { interpretRequest } from "./domain/interpretation.js";
 import { calculateArtistFinalPrice } from "./domain/pricing.js";
 import { pickProducers, getCuratedAlternatives, pickProducerPath, buildOfferFrom, findProducerByName } from "./domain/matching.js";
 import { sanitizeContextForClassification } from "./domain/contextSanitize.js";
+import {
+  TIME_SLOT_OPTIONS, FLEXIBLE_TIME_SLOT,
+  normalizeTimeSlots, toggleTimeSlot, isTimeSlotOptionDisabled, formatTimeSlots,
+} from "./domain/timeSlots.js";
 import {
   applyStartBooking, applyRequestSlot,
   canConfirmSlot, applyConfirmSlot, getRemainingConfirmationDelay,
@@ -319,8 +323,17 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   const animatedZoneExamples = ["Palermo", "Belgrano", "Villa Crespo", "Almagro", "Colegiales", "Caballito", "Chacarita", "Boedo"];
   const [customZoneVisible, setCustomZoneVisible] = useState(!!initialLocation && initialLocation !== "Cerca mío" && !zoneOptions.includes(initialLocation));
   const [locationPermissionPrompt, setLocationPermissionPrompt] = useState(false);
-  const [franja, setFranja] = useState(initialContext?.franja ?? timeSlot ?? null);
-  const [locationReviewed, setLocationReviewed] = useState(!reviewExisting);
+  const [timeSlots, setTimeSlots] = useState(() => {
+    const fromContext = normalizeTimeSlots(initialContext);
+    if (fromContext.length > 0) return fromContext;
+    // timeSlot viene del intérprete en minúscula ("noche"): normalizeTimeSlots
+    // lo canonicaliza a "Noche" acá para que BigOption lo muestre seleccionado.
+    return normalizeTimeSlots(timeSlot ? [timeSlot] : []);
+  });
+  // Siempre requiere el botón "Continuar" explícito antes de avanzar — no
+  // sólo al reeditar un pedido existente, también en uno nuevo — porque
+  // ahora elegir la primera franja ya no debe avanzar la pantalla sola.
+  const [locationReviewed, setLocationReviewed] = useState(false);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState(null);
   const [datoFaltanteTexto, setDatoFaltanteTexto] = useState(initialContext?.datoFaltanteTexto ?? "");
@@ -340,7 +353,7 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   const genreInferenceApplied = useRef(false);
 
   const needsModalidad = tipo === "hacer" && (!modalidadElegida || !modalidadReviewed);
-  const needsUbicacionFranja = (tipo === "grabar" || (tipo === "hacer" && modalidadElegida === "presencial")) && (!ubicacion || !franja || !locationReviewed);
+  const needsUbicacionFranja = (tipo === "grabar" || (tipo === "hacer" && modalidadElegida === "presencial")) && (!ubicacion || timeSlots.length === 0 || !locationReviewed);
   const needsDatoFaltante = tipo === "especial" && (datos_faltantes || []).includes("fecha_hora") && !datoFaltanteConfirmado;
   const needsReferencia = !referenciaTexto && !referenciaConfirmada;
   const needsGeneros = !generosConfirmados;
@@ -358,7 +371,7 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
         modalidad: modalidadElegida,
         ubicacion,
         coordinates,
-        franja,
+        timeSlots,
         datoFaltanteTexto: datoFaltanteTexto || null,
         datoFaltanteConfirmado,
         referenciaLink: referenciaLink.trim() || null,
@@ -546,13 +559,27 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
             </div>
             <div>
               <Label>Horario</Label>
+              <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12, lineHeight: 1.4, margin: "-4px 0 10px" }}>
+                Podés elegir hasta dos opciones
+              </p>
               <div>
-                {["Mañana", "Tarde", "Noche", "Me adapto"].map((op) => (
-                  <BigOption key={op} label={op} selected={franja === op} onClick={() => setFranja(op)} />
+                {TIME_SLOT_OPTIONS.map((op) => (
+                  <BigOption
+                    key={op}
+                    label={op}
+                    selected={timeSlots.includes(op)}
+                    disabled={isTimeSlotOptionDisabled(timeSlots, op)}
+                    onClick={() => setTimeSlots((current) => toggleTimeSlot(current, op))}
+                  />
                 ))}
+                <BigOption
+                  label={FLEXIBLE_TIME_SLOT}
+                  selected={timeSlots.includes(FLEXIBLE_TIME_SLOT)}
+                  onClick={() => setTimeSlots((current) => toggleTimeSlot(current, FLEXIBLE_TIME_SLOT))}
+                />
               </div>
             </div>
-            {reviewExisting && ubicacion && franja && !locationReviewed && (
+            {ubicacion && timeSlots.length > 0 && !locationReviewed && (
               <div style={{ marginTop: 22 }}>
                 <PrimaryButton full onClick={() => setLocationReviewed(true)}>Continuar</PrimaryButton>
               </div>
@@ -637,7 +664,8 @@ function SummaryScreen({ classification, context, onEdit, onPublish, publishing,
   const { title, summary, originalText, referencia: referenciaClasif, usedFallback } = classification;
   const detalles = [];
   if (context.ubicacion) detalles.push(context.ubicacion);
-  if (context.franja) detalles.push(context.franja);
+  const timeSlotsLabel = formatTimeSlots(context);
+  if (timeSlotsLabel) detalles.push(timeSlotsLabel);
   if (context.datoFaltanteTexto) detalles.push(context.datoFaltanteTexto);
   if (context.modalidad === "online") detalles.push("Online");
 
@@ -1283,6 +1311,7 @@ export default function App() {
       }
     })();
     migrateLegacyClosedRequests();
+    migrateLegacyTimeSlots();
     return () => timers.current.forEach(clearTimeout);
   }, []);
 
@@ -1371,11 +1400,12 @@ export default function App() {
     const referenciaSignal = [classification.summary, context.referenciaLink, classification.referencia].filter(Boolean).join(" ");
     const generosDeclarados = (context.generos || []).filter((g) => g !== "no_se");
     const generos = Array.from(new Set([...generosDeclarados, ...detectGeneros(referenciaSignal)]));
+    const contextTimeSlots = normalizeTimeSlots(context);
     const matchingContext = {
       modalidad: context.modalidad || classification.modalidad,
       ubicacion: context.ubicacion || classification.locationText,
       coordinates: context.coordinates || null,
-      franja: context.franja || classification.timeSlot,
+      timeSlots: contextTimeSlots.length > 0 ? contextTimeSlots : normalizeTimeSlots(classification.timeSlot ? [classification.timeSlot] : []),
     };
     const { productores, ampliado } = pickProducers(classification.tipo, generos, matchingContext);
     const tieneReferencia = !!(classification.referencia || context.referenciaLink || context.archivoAdjunto || context.audioAdjunto);
@@ -1406,7 +1436,8 @@ export default function App() {
       modalidad: matchingContext.modalidad,
       ubicacion: matchingContext.ubicacion,
       coordinates: matchingContext.coordinates,
-      franja: matchingContext.franja,
+      timeSlots: matchingContext.timeSlots,
+      franja: matchingContext.timeSlots[0] || null,
       dateText: classification.dateText || null,
       timeText: classification.timeText || null,
       estado: "esperando",
@@ -1474,7 +1505,8 @@ export default function App() {
       modalidad: matchingContext.modalidad,
       ubicacion: matchingContext.ubicacion,
       coordinates: matchingContext.coordinates,
-      franja: matchingContext.franja,
+      timeSlots: matchingContext.timeSlots,
+      franja: matchingContext.timeSlots[0] || null,
       dateText: classification.dateText || null,
       timeText: classification.timeText || null,
       estado: "esperando",

@@ -1,4 +1,5 @@
 import { uid } from "../lib/id.js";
+import { timeSlotsMatch } from "./timeSlots.js";
 
 /* ---------------- datos simulados de productores ---------------- */
 
@@ -187,11 +188,7 @@ function producerMatchesContext(productor, context = {}) {
     if ((productor.modalidadTipo || "").toLowerCase() !== requestedModality.toLowerCase()) return false;
   }
 
-  const requestedSlot = (context.franja || "").toLowerCase();
-  if (requestedSlot && !["me da igual", "me adapto"].includes(requestedSlot)) {
-    const availableSlots = (productor.franjas || []).map((slot) => slot.toLowerCase());
-    if (!availableSlots.includes(requestedSlot)) return false;
-  }
+  if (!timeSlotsMatch(context, productor.franjas)) return false;
 
   const requestedLocation = (context.ubicacion || "").trim().toLowerCase();
   if (requestedLocation === "cerca mío" && context.coordinates && productor.modalidadTipo !== "Online") {

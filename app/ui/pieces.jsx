@@ -166,10 +166,11 @@ function lowerFirstLabel(label) {
 
 // Fila de opción grande (modalidad, ubicación, franja, géneros, horarios de
 // reserva…): texto en minúscula con un punto azul cuando está seleccionada.
-export function BigOption({ label, selected, onClick }) {
+export function BigOption({ label, selected, disabled, onClick }) {
   return (
     <button
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
       className="press"
       style={{
         display: "flex",
@@ -181,7 +182,8 @@ export function BigOption({ label, selected, onClick }) {
         border: "none",
         borderBottom: `1px solid ${COLORS.border}`,
         padding: "14px 2px",
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.4 : 1,
       }}
     >
       <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: selected ? 700 : 500, fontSize: 16.5, color: selected ? COLORS.text : COLORS.muted }}>

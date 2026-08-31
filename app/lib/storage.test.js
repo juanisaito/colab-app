@@ -7,6 +7,7 @@ import {
   updateRequestById,
   saveRequests,
   migrateLegacyClosedRequests,
+  migrateLegacyTimeSlots,
 } from "./storage.js";
 import {
   esPropuestaElegida, esCancelado, puedeRecibirActividadDeProductores, tieneProfesionalElegido,
@@ -142,6 +143,40 @@ test("migrateLegacyClosedRequests convierte 'cerrado' en 'propuesta_elegida' sin
   assert.equal(a.resumen, "pedido legacy");
   const b = all.find((r) => r.id === "b");
   assert.equal(b.estado, "esperando");
+});
+
+test("migrateLegacyTimeSlots deriva timeSlots de franja sin tocar otros campos", async () => {
+  installMemoryLocalStorage();
+  seedRequests([
+    { id: "a", estado: "esperando", franja: "Tarde", resumen: "pedido legacy" },
+    { id: "b", estado: "esperando", franja: null },
+  ]);
+  await migrateLegacyTimeSlots();
+  const all = await getAllRequests();
+  const a = all.find((r) => r.id === "a");
+  assert.deepEqual(a.timeSlots, ["Tarde"]);
+  assert.equal(a.franja, "Tarde");
+  assert.equal(a.resumen, "pedido legacy");
+  const b = all.find((r) => r.id === "b");
+  assert.deepEqual(b.timeSlots, []);
+});
+
+test("migrateLegacyTimeSlots canonicaliza una franja legacy guardada en minúscula", async () => {
+  installMemoryLocalStorage();
+  seedRequests([{ id: "a", estado: "esperando", franja: "noche" }]);
+  await migrateLegacyTimeSlots();
+  const all = await getAllRequests();
+  assert.deepEqual(all[0].timeSlots, ["Noche"]);
+  assert.equal(all[0].franja, "noche"); // franja original no se toca
+});
+
+test("migrateLegacyTimeSlots es idempotente: un pedido que ya tiene timeSlots no se reescribe", async () => {
+  installMemoryLocalStorage();
+  seedRequests([{ id: "a", estado: "esperando", franja: "Tarde", timeSlots: ["Mañana", "Tarde"] }]);
+  await migrateLegacyTimeSlots();
+  const all = await getAllRequests();
+  // Ya tenía timeSlots propio (dos franjas): no se pisa con [franja].
+  assert.deepEqual(all[0].timeSlots, ["Mañana", "Tarde"]);
 });
 
 test("un fallo de escritura hace que updateRequestById devuelva ok: false", async () => {
