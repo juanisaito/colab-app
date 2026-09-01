@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { EDITORIAL } from "../../theme.js";
-import { EditorialPrimaryButton, editorialUnderlineInputStyle, EditorialThinkingDots } from "../../ui/pieces.jsx";
+import { EditorialPrimaryButton, EditorialCircleArrowButton, editorialUnderlineInputStyle, EditorialThinkingDots } from "../../ui/pieces.jsx";
 import AnimatedPrompt from "../../ui/AnimatedPrompt.jsx";
 
 const REQUEST_EXAMPLES = [
@@ -19,7 +19,6 @@ export default function RequestComposer({
   error = null,
   compact = false,
   centered = false,
-  fullButton = false,
   blocked = false,
   blockedMessage = null,
   onBlockedAction = null,
@@ -35,42 +34,53 @@ export default function RequestComposer({
 
       {!blocked && (
         <div style={{ position: "relative" }}>
-          <textarea
-            value={text}
-            onChange={(event) => onTextChange(event.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            rows={compact ? 1 : 2}
-            disabled={busy}
-            aria-label="Contanos qué querés hacer"
-            style={{
-              ...editorialUnderlineInputStyle,
-              position: "relative",
-              zIndex: 2,
-              resize: "none",
-              lineHeight: 1.45,
-              minHeight: compact ? 46 : 62,
-              maxHeight: compact ? 72 : 104,
-              fontSize: compact ? 15.5 : 17,
-              textAlign: centered ? "center" : "left",
-            }}
-          />
-          {!text && !focused && (
-            <div
-              className="q-fade"
-              style={{
-                position: "absolute",
-                inset: "8px 0 auto",
-                pointerEvents: "none",
-                fontFamily: EDITORIAL.fontSans,
-                fontSize: compact ? 15.5 : 17,
-                lineHeight: 1.45,
-                textAlign: centered ? "center" : "left",
-              }}
-            >
-              <AnimatedPrompt examples={REQUEST_EXAMPLES} color={EDITORIAL.muted} />
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
+            <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+              <textarea
+                value={text}
+                onChange={(event) => onTextChange(event.target.value)}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    if (canSubmit) onSubmit(text.trim());
+                  }
+                }}
+                rows={compact ? 1 : 2}
+                disabled={busy}
+                aria-label="Contanos qué querés hacer"
+                style={{
+                  ...editorialUnderlineInputStyle,
+                  position: "relative",
+                  zIndex: 2,
+                  resize: "none",
+                  lineHeight: 1.45,
+                  minHeight: compact ? 46 : 62,
+                  maxHeight: compact ? 72 : 104,
+                  fontSize: compact ? 15.5 : 17,
+                  textAlign: centered ? "center" : "left",
+                }}
+              />
+              {!text && !focused && (
+                <div
+                  className="q-fade"
+                  style={{
+                    position: "absolute",
+                    inset: "8px 0 auto",
+                    pointerEvents: "none",
+                    fontFamily: EDITORIAL.fontSans,
+                    fontSize: compact ? 15.5 : 17,
+                    lineHeight: 1.45,
+                    textAlign: centered ? "center" : "left",
+                  }}
+                >
+                  <AnimatedPrompt examples={REQUEST_EXAMPLES} color={EDITORIAL.muted} />
+                </div>
+              )}
             </div>
-          )}
+            <EditorialCircleArrowButton disabled={!canSubmit} onClick={() => onSubmit(text.trim())} />
+          </div>
           <div style={{ height: 1.5, background: focused ? EDITORIAL.carbon : EDITORIAL.border, transition: "background .15s ease" }} />
         </div>
       )}
@@ -83,16 +93,17 @@ export default function RequestComposer({
       {!blocked && error && (
         <p style={{ color: EDITORIAL.error, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, margin: "9px 0 0" }}>{error}</p>
       )}
+      {!blocked && busy && (
+        <p style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5, margin: "9px 0 0", justifyContent: centered ? "center" : "flex-start" }}>
+          Entendiendo <EditorialThinkingDots color={EDITORIAL.muted} />
+        </p>
+      )}
 
-      <div style={{ display: "flex", justifyContent: centered || compact ? "center" : "stretch", marginTop: compact ? 12 : 16 }}>
-        {blocked ? (
-          <EditorialPrimaryButton full={fullButton} onClick={onBlockedAction}>Completar aclaración</EditorialPrimaryButton>
-        ) : (
-          <EditorialPrimaryButton full={fullButton} disabled={!canSubmit} onClick={() => onSubmit(text.trim())}>
-            {busy ? <>Entendiendo <EditorialThinkingDots color={EDITORIAL.muted} /></> : "Continuar"}
-          </EditorialPrimaryButton>
-        )}
-      </div>
+      {blocked && (
+        <div style={{ display: "flex", justifyContent: centered || compact ? "center" : "stretch", marginTop: compact ? 12 : 16 }}>
+          <EditorialPrimaryButton onClick={onBlockedAction}>Completar aclaración</EditorialPrimaryButton>
+        </div>
+      )}
     </div>
   );
 }

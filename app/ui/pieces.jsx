@@ -398,6 +398,70 @@ export function EditorialBackButton({ onClick, disabled, color = EDITORIAL.carbo
   );
 }
 
+// Icono geométrico simple (no doodle a mano) para la acción principal de
+// ubicación — un pin de trazo fino, no ilustrativo.
+export function LocationPinIcon({ size = 18, color = EDITORIAL.carbon }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path d="M12 21c4-4.5 7-8.14 7-11.5A7 7 0 0 0 5 9.5C5 12.86 8 16.5 12 21Z" stroke={color} strokeWidth={1.6} strokeLinejoin="round" />
+      <circle cx="12" cy="9.5" r="2.4" stroke={color} strokeWidth={1.6} />
+    </svg>
+  );
+}
+
+// Chevron para acciones secundarias que expanden una lista debajo (mismo
+// trazo que EditorialBackButton/EditorialCircleArrowButton, apuntando a la
+// derecha por defecto y rotado cuando la lista que abren ya está abierta.
+export function ChevronIcon({ direction = "right", size = 16, color = EDITORIAL.carbon }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      style={{ flexShrink: 0, transform: direction === "down" ? "rotate(90deg)" : "none", transition: "transform .15s ease" }}
+    >
+      <path d="M9 5 L16 12 L9 19" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// Acción circular de "seguir" para compositores de un solo campo (texto
+// libre o nombre): reemplaza el botón de texto "Continuar" de esos casos
+// puntuales por una flecha real, alineada al extremo derecho de la línea
+// del campo en vez de ocupar una fila propia. Carbón mientras el valor no
+// es válido (o está deshabilitado por otro motivo, ej. guardando), naranja
+// apenas es válido — un único criterio (disabled) decide el color.
+export function EditorialCircleArrowButton({ onClick, disabled, ariaLabel = "Seguir", color = EDITORIAL.carbon, activeColor = EDITORIAL.accent }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      className="press"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 44,
+        height: 44,
+        flexShrink: 0,
+        borderRadius: "50%",
+        background: disabled ? color : activeColor,
+        border: "none",
+        padding: 0,
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M9 5 L16 12 L9 19" stroke={EDITORIAL.bg} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
+}
+
 // Tres puntos que pulsan suavemente mientras COLAB interpreta un pedido — no
 // un spinner genérico. La animación sólo corre mientras el estado "busy" que
 // la muestra está activo; con prefers-reduced-motion queda estática (ver

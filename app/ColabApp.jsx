@@ -7,7 +7,8 @@ import { HomeScreen, OrdersScreen, MessagesScreen, ProfileScreen, HelpScreen, Pr
 import {
   PrimaryButton, TextLink, UnderlineField, Screen, ProducerPhoto,
   EditorialPrimaryButton, EditorialSecondaryButton, EditorialTextLink, EditorialUnderlineField, editorialUnderlineInputStyle, HandDrawnUnderline,
-  EditorialLabel, EditorialBigOption, EditorialBackButton, EditorialThinkingDots,
+  EditorialLabel, EditorialBigOption, EditorialBackButton, EditorialCircleArrowButton, EditorialThinkingDots,
+  LocationPinIcon, ChevronIcon,
   DoodlePathsDiverging, DoodlePinClock, DoodleWaveform, DoodleSoundStars, DoodleCheck, DoodleSpeechBubble,
 } from "./ui/pieces.jsx";
 import { uid } from "./lib/id.js";
@@ -195,7 +196,6 @@ function Gate({ onDone }) {
           onSubmit={() => setStep("name")}
           error={gateError}
           centered
-          fullButton
         />
       </Screen>
     );
@@ -210,27 +210,38 @@ function Gate({ onDone }) {
         Puede ser tu nombre artístico o como te dicen habitualmente.
       </p>
       <div style={{ position: "relative" }}>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onFocus={() => setNameFocused(true)}
-          onBlur={() => setNameFocused(false)}
-          autoFocus
-          style={{ ...editorialUnderlineInputStyle, position: "relative", zIndex: 2 }}
-        />
-        {!name && (
-          <div style={{ position: "absolute", inset: "8px 0 auto", pointerEvents: "none", fontFamily: EDITORIAL.fontSans, fontSize: 17 }}>
-            <AnimatedPrompt examples={artistExamples} color={EDITORIAL.muted} />
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
+          <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onFocus={() => setNameFocused(true)}
+              onBlur={() => setNameFocused(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (!(name.trim().length < 2 || saving)) finishGate();
+                }
+              }}
+              autoFocus
+              style={{ ...editorialUnderlineInputStyle, position: "relative", zIndex: 2 }}
+            />
+            {!name && (
+              <div style={{ position: "absolute", inset: "8px 0 auto", pointerEvents: "none", fontFamily: EDITORIAL.fontSans, fontSize: 17 }}>
+                <AnimatedPrompt examples={artistExamples} color={EDITORIAL.muted} />
+              </div>
+            )}
           </div>
-        )}
+          <EditorialCircleArrowButton disabled={name.trim().length < 2 || saving} onClick={finishGate} />
+        </div>
         <div style={{ height: 1.5, background: nameFocused ? EDITORIAL.carbon : EDITORIAL.border, transition: "background .15s ease" }} />
       </div>
       {gateError && <p style={{ color: EDITORIAL.error, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, marginTop: 10 }}>{gateError}</p>}
-      <div style={{ marginTop: 24 }}>
-        <EditorialPrimaryButton full disabled={name.trim().length < 2 || saving} onClick={finishGate}>
-          {saving ? "Preparando tu pedido…" : "Continuar"}
-        </EditorialPrimaryButton>
-      </div>
+      {saving && (
+        <p style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5, marginTop: 10 }}>
+          Preparando tu pedido <EditorialThinkingDots />
+        </p>
+      )}
     </Screen>
   );
 }
@@ -276,25 +287,36 @@ function StartScreen({ onSubmit, interpreting, error, initialText, onExit, exitL
       <EditorialLabel>¿Qué querés hacer?</EditorialLabel>
 
       <div style={{ position: "relative", marginTop: 4 }}>
-        <textarea
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            e.currentTarget.style.height = "64px";
-            e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 104)}px`;
-          }}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          aria-label="Contanos qué querés hacer"
-          rows={2}
-          disabled={interpreting}
-          style={{ ...editorialUnderlineInputStyle, position: "relative", zIndex: 2, resize: "none", lineHeight: 1.45, height: 64, minHeight: 64, maxHeight: 104, overflowY: "auto" }}
-        />
-        {text.length === 0 && !focused && (
-          <div className="q-fade" style={{ position: "absolute", top: 0, left: 0, right: 0, padding: "8px 0", pointerEvents: "none", fontFamily: EDITORIAL.fontSans, fontSize: 17, lineHeight: 1.5 }}>
-            <AnimatedPrompt examples={examples} color={EDITORIAL.muted} />
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
+          <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+            <textarea
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                e.currentTarget.style.height = "64px";
+                e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 104)}px`;
+              }}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (text.trim().length >= 3 && !interpreting) onSubmit(text.trim());
+                }
+              }}
+              aria-label="Contanos qué querés hacer"
+              rows={2}
+              disabled={interpreting}
+              style={{ ...editorialUnderlineInputStyle, position: "relative", zIndex: 2, resize: "none", lineHeight: 1.45, height: 64, minHeight: 64, maxHeight: 104, overflowY: "auto" }}
+            />
+            {text.length === 0 && !focused && (
+              <div className="q-fade" style={{ position: "absolute", top: 0, left: 0, right: 0, padding: "8px 0", pointerEvents: "none", fontFamily: EDITORIAL.fontSans, fontSize: 17, lineHeight: 1.5 }}>
+                <AnimatedPrompt examples={examples} color={EDITORIAL.muted} />
+              </div>
+            )}
           </div>
-        )}
+          <EditorialCircleArrowButton disabled={text.trim().length < 3 || interpreting} onClick={() => onSubmit(text.trim())} />
+        </div>
         <div style={{ height: 1.5, background: focused ? EDITORIAL.carbon : EDITORIAL.border, transition: "background .15s ease" }} />
       </div>
 
@@ -305,12 +327,6 @@ function StartScreen({ onSubmit, interpreting, error, initialText, onExit, exitL
           Interpretando tu pedido <EditorialThinkingDots />
         </p>
       )}
-
-      <div style={{ marginTop: 30 }}>
-        <EditorialPrimaryButton full disabled={text.trim().length < 3 || interpreting} onClick={() => onSubmit(text.trim())}>
-          Continuar
-        </EditorialPrimaryButton>
-      </div>
     </Screen>
   );
 }
@@ -590,21 +606,81 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
                 ¿En qué zona te sirve trabajar?
               </p>
               <div>
-                <EditorialBigOption
-                  label="Usar mi ubicación aproximada"
-                  selected={ubicacion === "Cerca mío"}
+                {/* Acción principal: única fila con borde propio (no un
+                    divisor compartido con la lista de abajo), para que se
+                    lea como LA acción de la sección y no como un ítem más
+                    de una lista de barrios. */}
+                <button
                   onClick={chooseAproximada}
-                />
-                <EditorialBigOption
-                  label="Elegir barrio o zona"
-                  selected={false}
+                  className="press"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    width: "100%",
+                    minHeight: 52,
+                    padding: "0 14px",
+                    textAlign: "left",
+                    background: "none",
+                    border: `1px solid ${EDITORIAL.border}`,
+                    borderRadius: 3,
+                    cursor: "pointer",
+                  }}
+                >
+                  <LocationPinIcon />
+                  <span style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 600, fontSize: 15.5, color: EDITORIAL.carbon }}>
+                    Usar mi ubicación aproximada
+                  </span>
+                </button>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0" }}>
+                  <div style={{ flex: 1, height: 1, background: EDITORIAL.border }} />
+                  <span style={{ fontFamily: EDITORIAL.fontSans, fontSize: 11.5, color: EDITORIAL.muted }}>o</span>
+                  <div style={{ flex: 1, height: 1, background: EDITORIAL.border }} />
+                </div>
+
+                {/* Acciones secundarias: mismo peso de texto (carbón) que la
+                    acción principal, pero sin caja — se distinguen de las
+                    filas de selección (barrios) de abajo, que siguen grises
+                    hasta que se eligen. */}
+                <button
                   onClick={chooseElegirZona}
-                />
-                <EditorialBigOption
-                  label="Otra zona"
-                  selected={locationMode === "otra_zona" && !!ubicacion}
+                  className="press"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    width: "100%",
+                    textAlign: "left",
+                    background: "none",
+                    border: "none",
+                    borderBottom: `1px solid ${EDITORIAL.border}`,
+                    padding: "13px 2px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <span style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 600, fontSize: 15.5, color: EDITORIAL.carbon }}>Elegir barrio o zona</span>
+                  <ChevronIcon direction={locationMode === "elegir_zona" ? "down" : "right"} />
+                </button>
+                <button
                   onClick={chooseOtraZona}
-                />
+                  className="press"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    width: "100%",
+                    textAlign: "left",
+                    background: "none",
+                    border: "none",
+                    borderBottom: `1px solid ${EDITORIAL.border}`,
+                    padding: "13px 2px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <span style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 600, fontSize: 15.5, color: EDITORIAL.carbon }}>Escribir otra zona</span>
+                  <ChevronIcon direction={locationMode === "otra_zona" ? "down" : "right"} />
+                </button>
               </div>
 
               {locationMode === "aproximada" && (
