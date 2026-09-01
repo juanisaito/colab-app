@@ -1,6 +1,6 @@
-import React, { useState } from "react";
-import { COLORS } from "../../theme.js";
-import { Label, PrimaryButton, SecondaryButton, ProducerPhoto, BigOption } from "../../ui/pieces.jsx";
+import React, { useState, useEffect, useRef } from "react";
+import { EDITORIAL } from "../../theme.js";
+import { EditorialLabel, EditorialPrimaryButton, EditorialSecondaryButton, ProducerPhoto, EditorialBigOption, DoodleCheck } from "../../ui/pieces.jsx";
 import { formatMoney } from "../../lib/format.js";
 import { calculateArtistFinalPrice } from "../../domain/pricing.js";
 import { getBookingPhase, formatBalanceDueLabel, calculateBalanceDueAt } from "../../domain/booking.js";
@@ -26,6 +26,17 @@ export default function BookingFlow({ estado, booking, chosenOffer, onStartBooki
   const [paying, setPaying] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [actionError, setActionError] = useState(null);
+  // WaitingScreen ya se encarga del fade de entrada cuando se abre un pedido
+  // directamente en fase de reserva (por ejemplo, tras recargar la página):
+  // ese primer render de BookingFlow no debe traer su propio q-fade, o los
+  // dos fades anidados se ven encima. A partir de ahí sí — cada cambio de
+  // fase (horario elegido, seña pagada, etc.) anima solo, sin el contenedor
+  // de WaitingScreen encima.
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+  }, []);
+  const phaseFadeClass = mountedRef.current ? "q-fade" : undefined;
 
   if (!chosenOffer) return null;
   const precioFinal = calculateArtistFinalPrice(chosenOffer.producerAmount);
@@ -75,13 +86,15 @@ export default function BookingFlow({ estado, booking, chosenOffer, onStartBooki
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
       <ProducerPhoto name={chosenOffer.productor} width={48} height={48} radius={11} />
       <div>
-        <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, color: COLORS.text, fontSize: 16 }}>{chosenOffer.productor}</div>
-        <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12.5 }}>
+        <div style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 700, color: EDITORIAL.carbon, fontSize: 16 }}>{chosenOffer.productor}</div>
+        <div style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5 }}>
           {chosenOffer.modalidadTipo}{chosenOffer.zona ? ` · ${chosenOffer.zona}` : ""}
         </div>
       </div>
     </div>
   );
+
+  const divider = <div style={{ height: 1, background: EDITORIAL.border, margin: "16px 0" }} />;
 
   // El saldo vence 24hs antes del horario — booking.balanceDueAt ya viene
   // calculado desde que se solicitó el horario; el fallback sólo cubre un
@@ -93,40 +106,41 @@ export default function BookingFlow({ estado, booking, chosenOffer, onStartBooki
 
   if (phase === "not_started") {
     return (
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
+      <div className={phaseFadeClass} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
         {producerHeader}
         <div style={{ marginBottom: 18 }}>
-          <Label>Trabajo incluido</Label>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>{chosenOffer.incluye}</p>
+          <EditorialLabel>Trabajo incluido</EditorialLabel>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>{chosenOffer.incluye}</p>
         </div>
+        {divider}
         <div style={{ marginBottom: 22 }}>
-          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 24, color: COLORS.text, fontWeight: 600 }}>{formatMoney(precioFinal)}</div>
-          <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12.5, marginTop: 2 }}>Precio final</div>
+          <div style={{ fontFamily: EDITORIAL.fontMono, fontSize: 24, color: EDITORIAL.carbon, fontWeight: 600 }}>{formatMoney(precioFinal)}</div>
+          <div style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5, marginTop: 2 }}>Precio final</div>
         </div>
-        <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12.5, lineHeight: 1.5, marginBottom: 20 }}>
+        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5, lineHeight: 1.5, marginBottom: 20 }}>
           Todavía no está confirmado. El siguiente paso es coordinar horario, reserva y pago con {chosenOffer.productor}.
         </p>
-        {actionError && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, marginBottom: 12 }}>{actionError}</p>}
-        <PrimaryButton full disabled={starting} onClick={startBooking}>{starting ? "Un momento…" : "Coordinar reserva"}</PrimaryButton>
+        {actionError && <p style={{ color: EDITORIAL.error, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, marginBottom: 12 }}>{actionError}</p>}
+        <EditorialPrimaryButton full disabled={starting} onClick={startBooking}>{starting ? "Un momento…" : "Coordinar reserva"}</EditorialPrimaryButton>
       </div>
     );
   }
 
   if (phase === "choose_slot") {
     return (
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
-        <h2 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 19, color: COLORS.text, margin: "0 0 8px", lineHeight: 1.3 }}>Elegí un horario</h2>
-        <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13, lineHeight: 1.5, marginBottom: 18 }}>
+      <div className={phaseFadeClass} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
+        <h2 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 20, color: EDITORIAL.carbon, margin: "0 0 8px", lineHeight: 1.25, letterSpacing: -0.2 }}>Elegí un horario</h2>
+        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, lineHeight: 1.5, marginBottom: 18 }}>
           Horarios simulados para este prototipo — {chosenOffer.productor} todavía tiene que confirmarlo.
         </p>
         <div>
           {(booking.availableSlots || []).map((slot) => (
-            <BigOption key={slot.id} label={slot.label} selected={pickedSlotId === slot.id} onClick={() => setPickedSlotId(slot.id)} />
+            <EditorialBigOption key={slot.id} label={slot.label} selected={pickedSlotId === slot.id} onClick={() => setPickedSlotId(slot.id)} />
           ))}
         </div>
-        {actionError && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, margin: "14px 0 0" }}>{actionError}</p>}
+        {actionError && <p style={{ color: EDITORIAL.error, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, margin: "14px 0 0" }}>{actionError}</p>}
         <div style={{ marginTop: 22 }}>
-          <PrimaryButton full disabled={!pickedSlotId || requesting} onClick={requestSlot}>{requesting ? "Solicitando…" : "Solicitar horario"}</PrimaryButton>
+          <EditorialPrimaryButton full disabled={!pickedSlotId || requesting} onClick={requestSlot}>{requesting ? "Solicitando…" : "Solicitar horario"}</EditorialPrimaryButton>
         </div>
       </div>
     );
@@ -134,11 +148,11 @@ export default function BookingFlow({ estado, booking, chosenOffer, onStartBooki
 
   if (phase === "awaiting_confirmation") {
     return (
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "safe center", alignItems: "center", textAlign: "center", padding: "0 26px 26px" }}>
-        <h2 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 19, color: COLORS.text, margin: "0 0 10px", lineHeight: 1.3 }}>
+      <div className={phaseFadeClass} style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "safe center", alignItems: "center", textAlign: "center", padding: "0 26px 26px" }}>
+        <h2 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 20, color: EDITORIAL.carbon, margin: "0 0 10px", lineHeight: 1.25, letterSpacing: -0.2 }}>
           Esperando confirmación
         </h2>
-        <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>
+        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>
           Le avisamos a {chosenOffer.productor} que pediste {booking.selectedSlot.label}. Te confirmamos apenas responda.
         </p>
       </div>
@@ -148,97 +162,98 @@ export default function BookingFlow({ estado, booking, chosenOffer, onStartBooki
   if (phase === "slot_confirmed") {
     if (showPayment) {
       return (
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
-          <h2 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 19, color: COLORS.text, margin: "0 0 4px", lineHeight: 1.3 }}>
+        <div className={phaseFadeClass} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
+          <h2 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 20, color: EDITORIAL.carbon, margin: "0 0 4px", lineHeight: 1.25, letterSpacing: -0.2 }}>
             Pagar seña
           </h2>
-          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 0.4, color: COLORS.accent, margin: "0 0 18px", textTransform: "uppercase" }}>
+          <p style={{ fontFamily: EDITORIAL.fontMono, fontSize: 11, letterSpacing: 0.4, color: EDITORIAL.accent, margin: "0 0 18px", textTransform: "uppercase", fontWeight: 600 }}>
             Simulación: no se realizará ningún cobro
           </p>
           <div style={{ marginBottom: 14 }}>
-            <Label>Total final</Label>
-            <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 15, margin: 0 }}>{formatMoney(booking.totalAmount)}</p>
+            <EditorialLabel>Total final</EditorialLabel>
+            <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 15, margin: 0 }}>{formatMoney(booking.totalAmount)}</p>
           </div>
           <div style={{ marginBottom: 14 }}>
-            <Label>Seña a pagar ahora</Label>
-            <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 15, margin: 0 }}>{formatMoney(booking.depositAmount)}</p>
+            <EditorialLabel>Seña a pagar ahora</EditorialLabel>
+            <p style={{ fontFamily: EDITORIAL.fontMono, color: EDITORIAL.carbon, fontSize: 17, fontWeight: 700, margin: 0 }}>{formatMoney(booking.depositAmount)}</p>
           </div>
+          {divider}
           <div style={{ marginBottom: 22 }}>
-            <Label>Saldo pendiente</Label>
-            <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 15, margin: 0 }}>{formatMoney(booking.balanceAmount)}</p>
-            <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12, marginTop: 4 }}>
+            <EditorialLabel>Saldo pendiente</EditorialLabel>
+            <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 15, margin: 0 }}>{formatMoney(booking.balanceAmount)}</p>
+            <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12, marginTop: 4 }}>
               Vence el {balanceDueLabel()} (24 horas antes de la sesión).
             </p>
           </div>
-          {actionError && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, marginBottom: 12 }}>{actionError}</p>}
+          {actionError && <p style={{ color: EDITORIAL.error, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, marginBottom: 12 }}>{actionError}</p>}
           <div style={{ display: "flex", gap: 9 }}>
-            <SecondaryButton full disabled={paying} onClick={() => setShowPayment(false)}>Volver</SecondaryButton>
-            <PrimaryButton full disabled={paying} onClick={confirmPayment}>{paying ? "Confirmando…" : "Confirmar pago (simulado)"}</PrimaryButton>
+            <EditorialSecondaryButton full disabled={paying} onClick={() => setShowPayment(false)}>Volver</EditorialSecondaryButton>
+            <EditorialPrimaryButton full disabled={paying} onClick={confirmPayment}>{paying ? "Confirmando…" : "Confirmar pago (simulado)"}</EditorialPrimaryButton>
           </div>
         </div>
       );
     }
     return (
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
+      <div className={phaseFadeClass} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
         {producerHeader}
         <div style={{ marginBottom: 14 }}>
-          <Label>Horario confirmado</Label>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 14, margin: 0 }}>{booking.selectedSlot.label}</p>
+          <EditorialLabel>Horario confirmado</EditorialLabel>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 14, margin: 0 }}>{booking.selectedSlot.label}</p>
         </div>
         <div style={{ marginBottom: 14 }}>
-          <Label>Alcance</Label>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>{chosenOffer.incluye}</p>
+          <EditorialLabel>Alcance</EditorialLabel>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>{chosenOffer.incluye}</p>
+        </div>
+        {divider}
+        <div style={{ marginBottom: 8 }}>
+          <EditorialLabel>Total final</EditorialLabel>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 15, margin: 0 }}>{formatMoney(booking.totalAmount)}</p>
         </div>
         <div style={{ marginBottom: 8 }}>
-          <Label>Total final</Label>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 15, margin: 0 }}>{formatMoney(booking.totalAmount)}</p>
-        </div>
-        <div style={{ marginBottom: 8 }}>
-          <Label>Seña (25%)</Label>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 15, margin: 0 }}>{formatMoney(booking.depositAmount)}</p>
+          <EditorialLabel>Seña (25%)</EditorialLabel>
+          <p style={{ fontFamily: EDITORIAL.fontMono, color: EDITORIAL.carbon, fontSize: 17, fontWeight: 700, margin: 0 }}>{formatMoney(booking.depositAmount)}</p>
         </div>
         <div style={{ marginBottom: 22 }}>
-          <Label>Saldo (75%)</Label>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 15, margin: 0 }}>{formatMoney(booking.balanceAmount)}</p>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12, marginTop: 4 }}>
+          <EditorialLabel>Saldo (75%)</EditorialLabel>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 15, margin: 0 }}>{formatMoney(booking.balanceAmount)}</p>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12, marginTop: 4 }}>
             El saldo vence el {balanceDueLabel()} (24 horas antes de la sesión).
           </p>
         </div>
-        <PrimaryButton full onClick={() => setShowPayment(true)}>Pagar seña</PrimaryButton>
+        <EditorialPrimaryButton full onClick={() => setShowPayment(true)}>Pagar seña</EditorialPrimaryButton>
       </div>
     );
   }
 
   if (phase === "confirmed") {
     return (
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
+      <div className={phaseFadeClass} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-          <div style={{ width: 30, height: 30, borderRadius: "50%", background: COLORS.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <span style={{ color: "#fff", fontSize: 14, fontWeight: 700 }}>✓</span>
-          </div>
-          <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 0.6, color: COLORS.accent, textTransform: "uppercase" }}>Reserva confirmada</span>
+          <DoodleCheck width={26} />
+          <span style={{ fontFamily: EDITORIAL.fontMono, fontSize: 11, letterSpacing: 0.6, color: EDITORIAL.accent, textTransform: "uppercase", fontWeight: 600 }}>Reserva confirmada</span>
         </div>
         {producerHeader}
         <div style={{ marginBottom: 14 }}>
-          <Label>Horario</Label>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 14, margin: 0 }}>{booking.selectedSlot?.label}</p>
+          <EditorialLabel>Horario</EditorialLabel>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 14, margin: 0 }}>{booking.selectedSlot?.label}</p>
+        </div>
+        {divider}
+        <div style={{ marginBottom: 8 }}>
+          <EditorialLabel>Total</EditorialLabel>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 15, margin: 0 }}>{formatMoney(booking.totalAmount)}</p>
         </div>
         <div style={{ marginBottom: 8 }}>
-          <Label>Total</Label>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 15, margin: 0 }}>{formatMoney(booking.totalAmount)}</p>
-        </div>
-        <div style={{ marginBottom: 8 }}>
-          <Label>Seña pagada</Label>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 15, margin: 0 }}>{formatMoney(booking.depositAmount)}</p>
+          <EditorialLabel>Seña pagada</EditorialLabel>
+          <p style={{ fontFamily: EDITORIAL.fontMono, color: EDITORIAL.carbon, fontSize: 17, fontWeight: 700, margin: 0 }}>{formatMoney(booking.depositAmount)}</p>
         </div>
         <div style={{ marginBottom: 22 }}>
-          <Label>Saldo pendiente</Label>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 15, margin: 0 }}>{formatMoney(booking.balanceAmount)}</p>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12, marginTop: 4 }}>
+          <EditorialLabel>Saldo pendiente</EditorialLabel>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 15, margin: 0 }}>{formatMoney(booking.balanceAmount)}</p>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12, marginTop: 4 }}>
             Vence el {balanceDueLabel()} (24 horas antes de la sesión).
           </p>
         </div>
-        <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12.5, lineHeight: 1.5, margin: 0 }}>
+        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5, lineHeight: 1.5, margin: 0 }}>
           La dirección exacta se comparte más adelante, cuando corresponda.
         </p>
       </div>
@@ -249,14 +264,14 @@ export default function BookingFlow({ estado, booking, chosenOffer, onStartBooki
   // estado real del pedido nunca se muestra como reserva confirmada por
   // descarte — se ofrece un estado recuperable, sin afirmar ningún pago.
   return (
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "safe center", alignItems: "center", textAlign: "center", padding: "0 26px 26px" }}>
-      <h2 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 19, color: COLORS.text, margin: "0 0 10px", lineHeight: 1.3 }}>
+    <div className={phaseFadeClass} style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "safe center", alignItems: "center", textAlign: "center", padding: "0 26px 26px" }}>
+      <h2 style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 20, color: EDITORIAL.carbon, margin: "0 0 10px", lineHeight: 1.25, letterSpacing: -0.2 }}>
         No pudimos cargar el estado de esta reserva
       </h2>
-      <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13.5, lineHeight: 1.5, margin: "0 0 20px" }}>
+      <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13.5, lineHeight: 1.5, margin: "0 0 20px" }}>
         Volvé a intentarlo en un momento. Si el problema sigue, contactanos desde Ayuda y soporte.
       </p>
-      <SecondaryButton full onClick={onRefresh}>Reintentar</SecondaryButton>
+      <EditorialSecondaryButton full onClick={onRefresh}>Reintentar</EditorialSecondaryButton>
     </div>
   );
 }

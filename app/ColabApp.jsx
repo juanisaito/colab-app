@@ -5,7 +5,7 @@ import { COLORS, EDITORIAL } from "./theme.js";
 import BottomNav from "./BottomNav.jsx";
 import { HomeScreen, OrdersScreen, MessagesScreen, ProfileScreen, HelpScreen, PrivacyScreen, EditNameScreen } from "./RootScreens.jsx";
 import {
-  PrimaryButton, SecondaryButton, TextLink, Label, UnderlineField, Screen, ProducerPhoto, BigOption,
+  PrimaryButton, TextLink, UnderlineField, Screen, ProducerPhoto,
   EditorialPrimaryButton, EditorialSecondaryButton, EditorialTextLink, EditorialUnderlineField, editorialUnderlineInputStyle, HandDrawnUnderline,
   EditorialLabel, EditorialBigOption, EditorialBackButton, EditorialThinkingDots,
   DoodlePathsDiverging, DoodlePinClock, DoodleWaveform, DoodleSoundStars, DoodleCheck, DoodleSpeechBubble,
@@ -1136,16 +1136,6 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
   const showBookingArea = tieneProfesionalElegido(estado);
   const chosenOffer = showBookingArea ? ofertas.find((o) => o.id === chosenOfferId) || null : null;
 
-  // BookingFlow todavía no entra en el rediseño editorial (bloque aparte) —
-  // mientras haya un profesional elegido, esta pantalla se queda exactamente
-  // como estaba (oscura) para no mostrar su texto claro sobre un fondo claro.
-  // Se decide con el estado recién sondeado, no con el `request` inicial del
-  // padre, así nunca queda desincronizado de lo que realmente se está
-  // mostrando debajo.
-  const chrome = showBookingArea
-    ? { bg: COLORS.bg, accent: COLORS.accent, fontMono: "'IBM Plex Mono', monospace" }
-    : { bg: EDITORIAL.bg, accent: EDITORIAL.accent, fontMono: EDITORIAL.fontMono };
-
   async function enviarAclaracion() {
     if (!aclaracionTexto.trim()) return;
     setEnviandoAclaracion(true);
@@ -1174,14 +1164,10 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
   }
 
   return (
-    <div className="q-fade" style={{ display: "flex", flexDirection: "column", height: "100%", background: chrome.bg }}>
+    <div className="q-fade" style={{ display: "flex", flexDirection: "column", height: "100%", background: EDITORIAL.bg }}>
       <div style={{ padding: "20px 22px 0", minHeight: 20 }}>
         <div style={{ marginBottom: 10 }}>
-          {showBookingArea ? (
-            <TextLink disabled={cancelling} onClick={onBack}>‹ Atrás</TextLink>
-          ) : (
-            <EditorialBackButton disabled={cancelling} onClick={onBack} />
-          )}
+          <EditorialBackButton disabled={cancelling} onClick={onBack} />
         </div>
         {estado === "cancelado" ? (
           <span style={{ fontFamily: EDITORIAL.fontMono, fontSize: 11, letterSpacing: 0.6, color: EDITORIAL.muted, textTransform: "uppercase" }}>
@@ -1191,9 +1177,8 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
           // Reservado no ofrece editar ni cancelar: editar dejó de tener
           // sentido con un profesional confirmado, y cancelar con seña
           // pagada requiere un esquema de devoluciones que no existe en este
-          // prototipo (ver context.md). Sigue oscuro — es parte de
-          // BookingFlow, todavía sin rediseñar.
-          <span style={{ fontFamily: chrome.fontMono, fontSize: 11, letterSpacing: 0.6, color: chrome.accent, textTransform: "uppercase" }}>
+          // prototipo (ver context.md).
+          <span style={{ fontFamily: EDITORIAL.fontMono, fontSize: 11, letterSpacing: 0.6, color: EDITORIAL.accent, textTransform: "uppercase" }}>
             Reserva confirmada
           </span>
         ) : confirmingCancel ? (
@@ -1339,62 +1324,66 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
 function OfferDetail({ offer, onBack, onChoose, onMessage, choosing, messaging, chooseError }) {
   const precioFinal = calculateArtistFinalPrice(offer.producerAmount);
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div className="q-fade" style={{ display: "flex", flexDirection: "column", height: "100%", background: EDITORIAL.bg }}>
       <div style={{ padding: "20px 22px 0", minHeight: 20 }}>
-        <TextLink onClick={onBack}>‹ Atrás</TextLink>
+        <EditorialBackButton onClick={onBack} />
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 22px 12px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
           <ProducerPhoto name={offer.productor} width={52} height={52} radius={12} />
           <div>
-            <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, color: COLORS.text, fontSize: 17 }}>{offer.productor}</div>
-            <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13 }}>{offer.zona ? offer.zona : offer.modalidadTipo}</div>
+            <div style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 700, color: EDITORIAL.carbon, fontSize: 17 }}>{offer.productor}</div>
+            <div style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13 }}>{offer.zona ? offer.zona : offer.modalidadTipo}</div>
           </div>
         </div>
 
         {/* Punto 9: la propuesta y el trabajo relacionado van antes que el precio. */}
-        <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 15, lineHeight: 1.55, margin: "18px 0 20px" }}>{offer.propuesta}</p>
+        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 15, lineHeight: 1.55, margin: "18px 0 20px" }}>{offer.propuesta}</p>
 
         <div style={{ marginBottom: 18 }}>
-          <Label>Trabajo relevante</Label>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 13.5, margin: 0 }}>{offer.trabajo}</p>
+          <EditorialLabel>Trabajo relevante</EditorialLabel>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 13.5, margin: 0 }}>{offer.trabajo}</p>
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <Label>Su sonido</Label>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 14, lineHeight: 1.5, margin: "0 0 6px" }}>{offer.topArtists.join(" · ")}</p>
+          <EditorialLabel>Su sonido</EditorialLabel>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 14, lineHeight: 1.5, margin: "0 0 6px" }}>{offer.topArtists.join(" · ")}</p>
           {offer.spotifyConnected && (
-            <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12.5, margin: 0 }}>
-              <span style={{ color: COLORS.accent }}>✓</span> Spotify conectado
+            <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5, margin: 0 }}>
+              <span style={{ color: EDITORIAL.accent }}>✓</span> Spotify conectado
             </p>
           )}
         </div>
 
+        <div style={{ height: 1, background: EDITORIAL.border, margin: "0 0 18px" }} />
+
         <div style={{ marginBottom: 18 }}>
-          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 26, color: COLORS.text, fontWeight: 600 }}>{formatMoney(precioFinal)}</div>
-          <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 12.5, marginTop: 2 }}>{offer.unidad}</div>
+          <div style={{ fontFamily: EDITORIAL.fontMono, fontSize: 26, color: EDITORIAL.carbon, fontWeight: 600 }}>{formatMoney(precioFinal)}</div>
+          <div style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5, marginTop: 2 }}>{offer.unidad}</div>
         </div>
 
         <div style={{ marginBottom: 18 }}>
-          <Label>Qué incluye</Label>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 13.5, margin: 0 }}>{offer.incluye}</p>
+          <EditorialLabel>Qué incluye</EditorialLabel>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 13.5, margin: 0 }}>{offer.incluye}</p>
         </div>
 
+        <div style={{ height: 1, background: EDITORIAL.border, margin: "0 0 18px" }} />
+
         <div style={{ marginBottom: 18 }}>
-          <Label>Zona y disponibilidad</Label>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.text, fontSize: 13.5, margin: "0 0 4px" }}>
+          <EditorialLabel>Zona y disponibilidad</EditorialLabel>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 13.5, margin: "0 0 4px" }}>
             {offer.modalidadTipo}{offer.zona ? ` · ${offer.zona}` : ""}
           </p>
-          <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COLORS.muted, fontSize: 13, margin: 0 }}>{offer.disponibilidad}</p>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: 0 }}>{offer.disponibilidad}</p>
         </div>
 
         <div style={{ marginBottom: 8 }}>
-          <Label>Señales de confianza</Label>
+          <EditorialLabel>Señales de confianza</EditorialLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {offer.confianza.map((c) => (
-              <span key={c} style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 13, color: COLORS.text }}>
-                <span style={{ color: COLORS.accent }}>✓</span> {c}
+              <span key={c} style={{ fontFamily: EDITORIAL.fontSans, fontSize: 13, color: EDITORIAL.carbon }}>
+                <span style={{ color: EDITORIAL.accent }}>✓</span> {c}
               </span>
             ))}
           </div>
@@ -1402,12 +1391,12 @@ function OfferDetail({ offer, onBack, onChoose, onMessage, choosing, messaging, 
       </div>
 
       <div style={{ padding: "12px 22px 20px" }}>
-        {chooseError && <p style={{ color: "#FF6B5A", fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, margin: "0 0 10px" }}>{chooseError}</p>}
+        {chooseError && <p style={{ color: EDITORIAL.error, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, margin: "0 0 10px" }}>{chooseError}</p>}
         <div style={{ display: "flex", gap: 9 }}>
-          <SecondaryButton full disabled={choosing || messaging} onClick={onMessage}>{messaging ? "Abriendo…" : "Enviar mensaje"}</SecondaryButton>
-          <PrimaryButton full disabled={choosing || messaging} onClick={onChoose}>
+          <EditorialSecondaryButton full disabled={choosing || messaging} onClick={onMessage}>{messaging ? "Abriendo…" : "Enviar mensaje"}</EditorialSecondaryButton>
+          <EditorialPrimaryButton full disabled={choosing || messaging} onClick={onChoose}>
             {choosing ? "Eligiendo…" : "Elegir propuesta"}
-          </PrimaryButton>
+          </EditorialPrimaryButton>
         </div>
       </div>
     </div>
@@ -2028,19 +2017,17 @@ export default function App() {
   // cada una de esas tres ramas de `body`, en vez de recalcularse con una
   // condición aparte que podría desincronizarse de cuál pantalla se eligió.
   let creationFlowActive = false;
-  // true cuando el body es WaitingScreen. El chrome exterior (franja
-  // superior + fondo del marco) se decide con esto + el `request.estado` que
-  // ya tiene el padre — pero WaitingScreen sondea el suyo propio en vivo, así
-  // que su contenido nunca depende de esto para decidir claro/oscuro (ver
-  // `chrome` local dentro de WaitingScreen): esto sólo evita, en el caso
-  // común, que la franja superior quede clara sobre un BookingFlow oscuro.
+  // true cuando el body es WaitingScreen (que ahora es editorial en todos
+  // sus estados, BookingFlow incluido) o OfferDetail.
   let waitingScreenActive = false;
+  let offerDetailActive = false;
   let body = null;
   if (profile === undefined || (profile && hasPublishedRequest === undefined)) {
     body = null;
   } else if (profile === null || (hasPublishedRequest === false && !inFlowMode)) {
     body = <Gate onDone={handleGateDone} />;
   } else if (selectedOffer) {
+    offerDetailActive = true;
     body = <OfferDetail offer={selectedOffer} choosing={choosing} messaging={messaging} chooseError={chooseError} onBack={() => { setSelectedOffer(null); setChooseError(null); }} onMessage={() => handleMessageOffer(selectedOffer)} onChoose={() => handleChoose(selectedOffer)} />;
   } else if (openInteres) {
     // Estas dos props sólo controlan la UI (deshabilitar la caja de texto,
@@ -2153,7 +2140,8 @@ export default function App() {
   const editorialChrome = profile === null
     || (hasPublishedRequest === false && !inFlowMode)
     || creationFlowActive
-    || (waitingScreenActive && !tieneProfesionalElegido(request.estado))
+    || waitingScreenActive
+    || offerDetailActive
     || (!!profile && (activeTab === "inicio" || activeTab === "pedidos") && !inFlowMode);
   const chrome = editorialChrome
     ? { bg: EDITORIAL.bg, border: EDITORIAL.border, accent: EDITORIAL.accent, fontMono: EDITORIAL.fontMono }
