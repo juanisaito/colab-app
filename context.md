@@ -1,6 +1,115 @@
 # COLAB — contexto y roadmap
 
-Actualizado: 30 de agosto de 2026.
+Actualizado: 2 de septiembre de 2026.
+
+## Para quien recién llega (pensado para vos + una IA)
+
+Esto alcanza para entender el proyecto y seguir escribiendo código sin leer
+todo el historial de abajo, que es un log cronológico de decisiones (el más
+reciente arriba, salvo esta sección).
+
+### Qué es COLAB
+
+Una app móvil que conecta artistas independientes con productores musicales.
+El artista cuenta con sus propias palabras qué quiere hacer ("¿Qué querés
+hacer?"); COLAB interpreta el pedido, selecciona productores relevantes y
+facilita conversación, propuesta, reserva, pago y continuidad del proyecto.
+La hipótesis central: un artista con una necesidad musical real recibe
+propuestas relevantes, elige una y paga dentro de COLAB. Ver "Propósito" y
+"Principios de producto" más abajo para el resto del contrato de producto —
+no cambian con este rediseño visual.
+
+### Estética actual: "estudio editorial"
+
+- Paleta cálida y clara (no oscura): fondo `#FAF7F1`, texto principal
+  ("carbón") `#1B1815`, acento naranja quemado `#C2410C` usado con
+  moderación (precios, estado activo, selección), bordes suaves `#E1DCD1`.
+  Tokens exactos en `app/theme.js`, export `EDITORIAL`.
+- Tipografía: sans (Helvetica Neue / sistema) para todo el texto legible.
+  IBM Plex Mono reservada sólo para labels en mayúscula y metadata (precios,
+  timestamps, códigos de estado) — nunca para el cuerpo de una acción.
+- Sin tarjetas ni sombras: las listas se separan con divisores finos
+  (`border-bottom`), no con cards.
+- La selección se indica con un punto naranja, no con checkmarks ni fondos
+  de color.
+- Doodles a mano (SVG propios en `app/ui/pieces.jsx`, prefijo `Doodle*`):
+  máximo uno por pantalla, nunca dentro de una opción individual, nunca
+  animados junto con su contenedor (evitar transiciones anidadas).
+- Los íconos funcionales (flechas, pin de ubicación) son geométricos
+  simples, no doodles — ver `EditorialBackButton`, `EditorialCircleArrowButton`,
+  `LocationPinIcon`, `ChevronIcon` en `app/ui/pieces.jsx`.
+- Todavía convive una paleta vieja (`COLORS`, oscura, acento azul) en las
+  pantallas que faltan rediseñar (ver abajo). Las dos paletas nunca se
+  mezclan dentro de una misma pantalla.
+
+### Qué ya está rediseñado vs. qué falta
+
+Ya en la paleta `EDITORIAL`: Gate (login/alta), `RequestComposer`, Inicio,
+alta de pedido completa (`StartScreen`/`ContextStep`/`SummaryScreen`),
+Pedidos (lista) y el chrome Inicio↔Pedidos, `WaitingScreen` en todos sus
+estados, `OfferDetail`, `BookingFlow` (coordinar horario → seña → reservado),
+el botón circular de "seguir" en los compositores de texto/nombre, y el
+rediseño de los controles de ubicación (acción principal con borde propio,
+acciones secundarias con flecha, barrios como lista de selección con punto
+naranja).
+
+Todavía con la paleta vieja (`COLORS`, oscura): `ConversationScreen` (el
+chat), Mensajes, Perfil, Ayuda y soporte, Privacidad y términos.
+
+Modo oscuro real (paleta negra/blanca, con toggle automático según el
+sistema + manual desde Perfil) todavía NO existe como feature. Está
+planeado como un bloque aparte — no se mezcla con terminar el rediseño de
+las pantallas de arriba, porque es un eje de trabajo distinto (agregar un
+segundo modo a pantallas ya rediseñadas, no reskinear pantallas nuevas).
+
+### Qué SÍ y qué NO al hacer un bloque de rediseño visual
+
+- SÍ: cambiar JSX, estilos, colores, tipografía, spacing; agregar piezas
+  visuales nuevas y aditivas en `app/ui/pieces.jsx` (nunca reemplazar ni
+  modificar el comportamiento de una pieza existente que siga usando otra
+  pantalla).
+- NO: tocar lógica de dominio (`app/domain/`), almacenamiento
+  (`app/lib/storage.js`), timers/simulaciones, navegación, ni los estados o
+  validaciones que ya existen. Si un cambio visual pareciera necesitar
+  tocar lógica, es una señal para pausar y decidirlo aparte, no para
+  resolverlo de paso.
+- Cada bloque de rediseño es chico y aislado: evitar mezclar dos rediseños
+  distintos en un mismo bloque (por ejemplo booking + ubicación), y evitar
+  mezclar rediseño visual con la integración de IA.
+- Antes de cualquier commit: `pnpm test`, `pnpm build`, `git diff --check`,
+  y probar el recorrido real en mobile (390px) y desktop (1440px) —  no
+  asumir que un cambio visual "obviamente funciona" sin probarlo en la app
+  corriendo.
+
+### Dónde vive cada cosa
+
+- `app/ColabApp.jsx` — pantallas principales del flujo de creación, espera
+  y contratación.
+- `app/RootScreens.jsx` — Inicio, Pedidos, Mensajes, Perfil y sus
+  sub-pantallas (navegación raíz).
+- `app/features/booking/BookingFlow.jsx` — coordinar horario, pagar la
+  seña, reserva confirmada.
+- `app/features/request/RequestComposer.jsx` — el compositor de texto
+  compartido ("¿Qué querés hacer?").
+- `app/ui/pieces.jsx` — piezas visuales compartidas (botones, campos,
+  doodles, íconos). No importa nada de `ColabApp.jsx` ni `RootScreens.jsx`
+  para evitar un ciclo de imports.
+- `app/theme.js` — `COLORS` (paleta vieja, oscura) y `EDITORIAL` (paleta
+  nueva, clara). Viven juntas a propósito; ver el comentario del archivo.
+- `app/domain/` — reglas de negocio puras (estado del pedido, booking,
+  franjas horarias, matching, precios), con sus tests (`*.test.js`, corren
+  con `pnpm test`).
+- `app/lib/storage.js` — acceso a localStorage/almacenamiento compartido.
+- `CONTRIBUTING.md` — convenciones de idioma (código en inglés, texto
+  visible en español rioplatense) y checklist antes de entregar un cambio.
+- `AI_ARCHITECTURE.md` — qué IA está conectada hoy (interpretación de
+  pedidos) y el plan para el resto (sugerencias, soporte, explicación de
+  matching, moderación) — todavía sin empezar en este prototipo.
+
+El resto de este archivo es el log cronológico de decisiones de producto y
+técnicas, del más reciente (justo abajo, con fecha del 30 de agosto) al más
+viejo. Sirve como historial y como referencia de detalle — no hace falta
+leerlo entero para empezar a trabajar.
 
 ## Inicio, sugerencias e integración de IA (30 de agosto de 2026)
 
@@ -213,7 +322,7 @@ El Build 5 de `app/ColabApp.jsx` suma edición de un pedido ya publicado sobre l
 - Las operaciones críticas no avanzan cuando falla el guardado.
 - **Nuevo en el Build 5:** desde "Tu proyecto ya está en movimiento" el artista tiene, además de "Cancelar pedido", la opción "Editar pedido" (ver [Actualización del prototipo — 29 de agosto de 2026](#actualización-del-prototipo--29-de-agosto-de-2026)).
 
-La dirección visual futura incorpora parte del universo de Liminal Records: base monocromática, composición editorial, fotografía musical cruda, grano controlado y tipografía mono para metadata. COLAB conserva identidad propia y usa azul eléctrico como color funcional; no copia mecánicamente el logo ni la estrella de Liminal.
+**Superado.** El párrafo original de esta sección planteaba una dirección visual futura inspirada en el universo de Liminal Records (base monocromática, azul eléctrico como color funcional). Esa dirección quedó reemplazada por la paleta "estudio editorial" (cálida, clara, acento naranja quemado) que arrancó como piloto en Gate/RequestComposer/Inicio y ya se extendió a la mayor parte del flujo — ver "Para quien recién llega" al principio de este archivo para el estado actual y los tokens exactos.
 
 ### Visualizador local
 
