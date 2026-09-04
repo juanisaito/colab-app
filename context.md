@@ -116,6 +116,49 @@ técnicas, del más reciente (justo abajo, con fecha del 3 de septiembre) al
 más viejo. Sirve como historial y como referencia de detalle — no hace
 falta leerlo entero para empezar a trabajar.
 
+## Pantalla de artistas de referencia (3 de septiembre de 2026)
+
+Sobre el bloque anterior (mundos musicales + flecha dibujada, ver entrada
+de abajo), se agregó la siguiente pantalla del alta: **¿Qué artistas
+debería entender el productor?**, entre mundos musicales y maqueta o
+referencia. Recorrido resultante: texto libre → logística que falte →
+mundos musicales → **artistas de referencia** → maqueta o referencia
+opcional → resumen.
+
+Extraída como componente propio, `app/features/request/MusicReferenceStep.jsx`
+(de presentación pura: recibe mundos confirmados, menciones detectadas y
+callbacks; no escribe storage ni conoce matching), usa directamente el
+selector determinístico ya aprobado —`suggestMusicReferences({ worldCodes:
+musicWorlds, selectedArtistIds, pinnedArtistIds, page })`— para mostrar
+seis referencias reales del catálogo (sólo nombre, nunca `market`,
+`primaryWorld`, `suggestionRole` ni notas de curaduría). `page` y el
+texto de búsqueda son estado efímero de la pantalla, no se persisten.
+
+**Menciones en el texto:** `app/domain/musicReferenceMentions.js` agrega
+`findMentionedMusicReferenceIds(text)` — dominio puro, reutiliza
+`normalizeArtistName` del catálogo, respeta límites de palabra (`wos` no
+matchea dentro de `shows`) y resuelve solapamientos a favor de la
+coincidencia más larga (para nombres compuestos como `Él Mató a un
+Policía Motorizado` o `CA7RIEL & Paco Amoroso`). En `ContextStep` se
+detectan menciones sobre el texto original + la referencia interpretada,
+y se pasan como `pinnedArtistIds` — aparecen en la tanda por prioridad
+del dominio, pero nunca quedan seleccionadas automáticamente.
+
+**Datos nuevos dentro de `context`** (mismo objeto ya persistido, sin
+migración): `musicReferenceIds` (hasta tres IDs reales y únicos, en orden
+de selección), `musicReferencesConfirmed`, `musicReferencesUndecided`.
+Igual que con `musicWorlds`, un pedido guardado antes de este bloque
+entra con estos tres campos vacíos, sin reescribir storage global.
+
+El resumen (`SummaryScreen`) suma una línea `Artistas: …` con nombres
+reales resueltos desde `MUSIC_REFERENCE_CATALOG` (nunca IDs); si el
+artista eligió "Todavía no tengo una referencia clara" o un pedido legacy
+no tiene `musicReferenceIds`, simplemente no se muestra esa línea.
+
+Sigue **fuera de alcance**, a propósito: esta selección todavía no toca
+`pickProducers` ni ningún puntaje de matching, no hay fotos ni canciones
+puntuales por artista, y la biblioteca de 80 nombres no cambió.
+
 ## Pantalla de mundos musicales y flecha dibujada a mano (3 de septiembre de 2026)
 
 Con la biblioteca musical V1 y el selector determinístico ya aprobados en

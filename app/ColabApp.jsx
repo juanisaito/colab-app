@@ -23,9 +23,11 @@ import {
   puedeCancelarse, requestNeedsArtistInput,
   puedeEscribirEnConversacion, tieneLimiteDeMensajes,
 } from "./domain/estado.js";
-import { detectGeneros } from "./domain/genres.js";
-import { MUSIC_WORLDS } from "./domain/musicReferenceCatalog.js";
+import { detectGeneros, GENRE_KEYWORDS } from "./domain/genres.js";
+import { MUSIC_WORLDS, MUSIC_REFERENCE_CATALOG } from "./domain/musicReferenceCatalog.js";
 import { normalizeSelectedMusicWorlds } from "./domain/musicReferenceSuggestions.js";
+import { findMentionedMusicReferenceIds } from "./domain/musicReferenceMentions.js";
+import MusicReferenceStep from "./features/request/MusicReferenceStep.jsx";
 import { interpretRequest } from "./domain/interpretation.js";
 import { calculateArtistFinalPrice } from "./domain/pricing.js";
 import { pickProducers, getCuratedAlternatives, pickProducerPath, buildOfferFrom, findProducerByName } from "./domain/matching.js";
@@ -371,6 +373,73 @@ function adaptGenreCodesToMusicWorlds(genreCodes) {
   return normalizeSelectedMusicWorlds(mapped);
 }
 
+// Mundos escritos explícitamente en el texto — reutiliza las keywords de
+// GENRE_KEYWORDS (sin duplicarlas) pero, a diferencia de detectGeneros(),
+// ignora "urbano" (no es uno de los ocho mundos visibles) y no considera
+// ARTIST_GENRE_HINTS: acá sólo importa lo que la persona escribió, no un
+// hint legacy asociado a un artista. Se ordena por la primera aparición de
+// cada keyword en el texto, para respetar el orden real de lo escrito.
+function detectExplicitMusicWorldsFromText(text) {
+  const lower = (text || "").toLowerCase();
+  const matches = [];
+  Object.entries(GENRE_KEYWORDS).forEach(([code, keywords]) => {
+    if (code === "urbano") return;
+    let firstIndex = -1;
+    keywords.forEach((keyword) => {
+      const idx = lower.indexOf(keyword);
+      if (idx !== -1 && (firstIndex === -1 || idx < firstIndex)) firstIndex = idx;
+    });
+    if (firstIndex !== -1) matches.push({ code, index: firstIndex });
+  });
+  matches.sort((a, b) => a.index - b.index);
+  return adaptGenreCodesToMusicWorlds(matches.map((match) => match.code));
+}
+
+// Mundo principal de artistas del catálogo mencionados en el texto, en el
+// mismo orden de aparición que ya devuelve findMentionedMusicReferenceIds.
+function detectMusicWorldsFromCatalogMentions(text) {
+  const mentionedIds = findMentionedMusicReferenceIds(text);
+  const worlds = mentionedIds
+    .map((id) => MUSIC_REFERENCE_CATALOG.find((entry) => entry.id === id)?.primaryWorld)
+    .filter(Boolean);
+  return normalizeSelectedMusicWorlds(worlds);
+}
+
+// Prioridad de inferencia para preseleccionar la pantalla de mundos
+// musicales: 1) señales explícitas escritas en el texto ("trap",
+// "electrónica"…) — si existe al menos una, no se agrega nada más, ni
+// siquiera el mundo de un artista mencionado; 2) si no hay ninguna señal
+// explícita, el mundo principal de artistas del catálogo mencionados; 3)
+// sólo si ninguna de las dos anteriores encontró algo, el fallback legacy
+// de siempre (detectGeneros, que sí incluye "urbano" y ARTIST_GENRE_HINTS).
+function inferInitialMusicWorlds(text) {
+  const explicit = detectExplicitMusicWorldsFromText(text);
+  if (explicit.length > 0) return explicit;
+
+  const fromMentions = detectMusicWorldsFromCatalogMentions(text);
+  if (fromMentions.length > 0) return fromMentions;
+
+  return adaptGenreCodesToMusicWorlds(detectGeneros(text));
+}
+
+// Normalización defensiva de una selección de artistas ya guardada (pedido
+// legacy o corrupto): sólo IDs reales del catálogo, deduplicados
+// respetando el orden, como máximo tres. Nunca muta el array recibido.
+const VALID_MUSIC_REFERENCE_IDS = new Set(MUSIC_REFERENCE_CATALOG.map((entry) => entry.id));
+
+function sanitizeStoredMusicReferenceIds(ids) {
+  if (!Array.isArray(ids)) return [];
+  const seen = new Set();
+  const result = [];
+  for (const id of ids) {
+    if (typeof id !== "string" || !VALID_MUSIC_REFERENCE_IDS.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+    if (result.length >= 3) break;
+  }
+  return result;
+}
+
 function ContextStep({ classification, initialContext, reviewExisting, onComplete, onBack }) {
   const { tipo, modalidad, modalidad_fuente, datos_faltantes, locationText, timeSlot, referencia: referenciaTexto } = classification;
 
@@ -431,6 +500,13 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   const [musicWorldsWereInferred, setMusicWorldsWereInferred] = useState(false);
   const [otherFieldOpen, setOtherFieldOpen] = useState(!!initialContext?.otherMusicWorld);
   const [otherMusicWorldText, setOtherMusicWorldText] = useState(initialContext?.otherMusicWorld ?? "");
+  // Menciones reales del catálogo dentro del texto original + la referencia
+  // ya interpretada: se usan como `pinnedArtistIds` en MusicReferenceStep,
+  // nunca como selección automática (ver contrato del selector aprobado).
+  const pinnedArtistIds = findMentionedMusicReferenceIds([classification.originalText, referenciaTexto].filter(Boolean).join(" "));
+  const [musicReferenceIds, setMusicReferenceIds] = useState(() => sanitizeStoredMusicReferenceIds(initialContext?.musicReferenceIds));
+  const [musicReferencesConfirmed, setMusicReferencesConfirmed] = useState(!!initialContext?.musicReferencesConfirmed && !reviewExisting);
+  const [musicReferencesUndecided, setMusicReferencesUndecided] = useState(!!initialContext?.musicReferencesUndecided);
   const fileInputRef = useRef(null);
   const musicWorldsInferenceApplied = useRef(false);
 
@@ -438,6 +514,7 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   const needsUbicacionFranja = (tipo === "grabar" || (tipo === "hacer" && modalidadElegida === "presencial")) && (!ubicacion || timeSlots.length === 0 || !locationReviewed);
   const needsDatoFaltante = tipo === "especial" && (datos_faltantes || []).includes("fecha_hora") && !datoFaltanteConfirmado;
   const needsMusicWorlds = !musicWorldsConfirmed;
+  const needsMusicReferences = !musicReferencesConfirmed;
   const needsReferencia = !referenciaTexto && !referenciaConfirmada;
 
   let phase = "done";
@@ -445,6 +522,7 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   else if (needsUbicacionFranja) phase = "ubicacion_franja";
   else if (needsDatoFaltante) phase = "dato_faltante";
   else if (needsMusicWorlds) phase = "musica";
+  else if (needsMusicReferences) phase = "artistas";
   else if (needsReferencia) phase = "referencia";
 
   useEffect(() => {
@@ -466,6 +544,9 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
         musicWorldsConfirmed: true,
         musicWorldsUndecided,
         otherMusicWorld: otherFieldOpen && otherMusicWorldText.trim() ? otherMusicWorldText.trim() : null,
+        musicReferenceIds,
+        musicReferencesConfirmed: true,
+        musicReferencesUndecided,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -476,7 +557,7 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
     musicWorldsInferenceApplied.current = true;
     if (musicWorlds.length > 0 || musicWorldsUndecided) return;
     const inferenceText = [classification.originalText, classification.summary, referenciaTexto, referenciaLink, archivoNombre].filter(Boolean).join(" ");
-    const inferred = adaptGenreCodesToMusicWorlds(detectGeneros(inferenceText));
+    const inferred = inferInitialMusicWorlds(inferenceText);
     if (inferred.length > 0) {
       setMusicWorlds(inferred);
       setMusicWorldsWereInferred(true);
@@ -953,6 +1034,18 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
           </>
         )}
 
+        {phase === "artistas" && (
+          <MusicReferenceStep
+            musicWorlds={musicWorlds}
+            pinnedArtistIds={pinnedArtistIds}
+            selectedArtistIds={musicReferenceIds}
+            onChangeSelectedArtistIds={setMusicReferenceIds}
+            undecided={musicReferencesUndecided}
+            onChangeUndecided={setMusicReferencesUndecided}
+            onContinue={() => setMusicReferencesConfirmed(true)}
+          />
+        )}
+
         {phase === "referencia" && (
           <>
             <PhaseHeading doodle={<DoodleWaveform width={48} />}>Maqueta o referencia</PhaseHeading>
@@ -1027,6 +1120,15 @@ function SummaryScreen({ classification, context, onEdit, onPublish, publishing,
     musicaTexto = `Música: ${labels.join(" · ")}`;
   }
 
+  // Resuelve nombres reales desde el catálogo — nunca IDs. Un pedido legacy
+  // sin musicReferenceIds (o la decisión explícita de no tener referencia)
+  // simplemente no muestra esta línea, sin renderizar nada negativo.
+  const musicReferenceCatalogById = new Map(MUSIC_REFERENCE_CATALOG.map((entry) => [entry.id, entry]));
+  const artistasNombres = (context.musicReferenceIds || [])
+    .map((id) => musicReferenceCatalogById.get(id)?.name)
+    .filter(Boolean);
+  const artistasTexto = artistasNombres.length > 0 ? `Artistas: ${artistasNombres.join(" · ")}` : null;
+
   return (
     <Screen className="q-fade" topSlot={<EditorialBackButton onClick={onEdit} />}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
@@ -1036,6 +1138,7 @@ function SummaryScreen({ classification, context, onEdit, onPublish, publishing,
       <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 16.5, lineHeight: 1.5, margin: "0 0 12px" }}>{summary}</p>
       {refTexto && <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: "0 0 6px" }}>Referencia: {refTexto}</p>}
       {musicaTexto && <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: "0 0 6px" }}>{musicaTexto}</p>}
+      {artistasTexto && <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: "0 0 6px" }}>{artistasTexto}</p>}
       {detalles.length > 0 && (
         <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: 0 }}>{detalles.join(" · ")}</p>
       )}
