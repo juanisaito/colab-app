@@ -339,7 +339,10 @@ export function EditorialLabel({ children }) {
 // Variante editorial de BigOption, agregada vía una pieza compartida propia
 // (no una prop en BigOption) para no tocar su render en la variante oscura
 // que sigue usando el resto de la app. Misma lógica de selección/deshabilitado.
-export function EditorialBigOption({ label, selected, disabled, onClick }) {
+// `dense` es aditivo (default false, mismo tamaño de siempre): sólo la usa
+// hoy la lista de barrios de "Ubicación y horario" (ver ColabApp.jsx), sin
+// tocar el resto de las pantallas que ya consumen esta pieza.
+export function EditorialBigOption({ label, selected, disabled, onClick, dense }) {
   return (
     <button
       onClick={disabled ? undefined : onClick}
@@ -359,7 +362,7 @@ export function EditorialBigOption({ label, selected, disabled, onClick }) {
         opacity: disabled ? 0.4 : 1,
       }}
     >
-      <span style={{ fontFamily: EDITORIAL.fontSans, fontWeight: selected ? 700 : 500, fontSize: 16.5, color: selected ? EDITORIAL.carbon : EDITORIAL.muted }}>
+      <span style={{ fontFamily: EDITORIAL.fontSans, fontWeight: selected ? 700 : 500, fontSize: dense ? 15 : 16.5, color: selected ? EDITORIAL.carbon : EDITORIAL.muted }}>
         {lowerFirstLabel(label)}
       </span>
       {selected && <span style={{ width: 7, height: 7, borderRadius: "50%", background: EDITORIAL.accent, flexShrink: 0 }} />}
@@ -410,8 +413,8 @@ export function LocationPinIcon({ size = 18, color = EDITORIAL.carbon }) {
 }
 
 // Chevron para acciones secundarias que expanden una lista debajo (mismo
-// trazo que EditorialBackButton/EditorialCircleArrowButton, apuntando a la
-// derecha por defecto y rotado cuando la lista que abren ya está abierta.
+// trazo que EditorialBackButton/EditorialHandDrawnSubmitButton, apuntando a
+// la derecha por defecto y rotado cuando la lista que abren ya está abierta.
 export function ChevronIcon({ direction = "right", size = 16, color = EDITORIAL.carbon }) {
   return (
     <svg
@@ -427,47 +430,18 @@ export function ChevronIcon({ direction = "right", size = 16, color = EDITORIAL.
   );
 }
 
-// Acción circular de "seguir" para compositores de un solo campo (texto
-// libre o nombre): reemplaza el botón de texto "Continuar" de esos casos
-// puntuales por una flecha real, alineada al extremo derecho de la línea
-// del campo en vez de ocupar una fila propia. Carbón mientras el valor no
-// es válido (o está deshabilitado por otro motivo, ej. guardando), naranja
-// apenas es válido — un único criterio (disabled) decide el color.
-export function EditorialCircleArrowButton({ onClick, disabled, ariaLabel = "Seguir", color = EDITORIAL.carbon, activeColor = EDITORIAL.accent }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={ariaLabel}
-      className="press"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 44,
-        height: 44,
-        flexShrink: 0,
-        borderRadius: "50%",
-        background: disabled ? color : activeColor,
-        border: "none",
-        padding: 0,
-        cursor: disabled ? "not-allowed" : "pointer",
-      }}
-    >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M9 5 L16 12 L9 19" stroke={EDITORIAL.bg} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </button>
-  );
-}
-
 // Flecha de envío dibujada a mano — la excepción deliberada al lenguaje
 // geométrico del resto de los controles funcionales (ver EditorialBackButton,
-// EditorialCircleArrowButton, ChevronIcon): sin círculo, pastilla ni fondo
-// sólido, trazo levemente irregular como si estuviera hecha con marcador.
-// Sólo para el envío de "¿Qué querés hacer?" (StartScreen y
-// RequestComposer) — no reemplaza ningún otro botón existente.
+// ChevronIcon): sin círculo, pastilla ni fondo sólido, trazo levemente
+// irregular como si estuviera hecha con marcador. Es LA acción de "seguir"
+// para cualquier compositor de un solo campo de texto breve (texto libre o
+// nombre): reemplaza el botón de texto "Continuar" de esos casos puntuales
+// por una flecha real, alineada al extremo derecho de la línea del campo en
+// vez de ocupar una fila propia. Antes existía también una variante circular
+// (EditorialCircleArrowButton) sólo para el paso del nombre — se unificaron
+// en ésta (bloque "Limpiar el flujo de creación musical", ver context.md)
+// para no tener dos flechas de avance distintas; no reemplaza ningún otro
+// botón (por ejemplo Continuar/Publicar de un paso con varios campos).
 export function EditorialHandDrawnSubmitButton({ onClick, disabled, ariaLabel = "Enviar", disabledColor = EDITORIAL.border, activeColor = EDITORIAL.accent }) {
   const strokeColor = disabled ? disabledColor : activeColor;
   return (

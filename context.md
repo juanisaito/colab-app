@@ -36,13 +36,17 @@ no cambian con este rediseño visual.
   máximo uno por pantalla, nunca dentro de una opción individual, nunca
   animados junto con su contenedor (evitar transiciones anidadas).
 - Los íconos funcionales (flechas, pin de ubicación) son geométricos
-  simples, no doodles — ver `EditorialBackButton`, `EditorialCircleArrowButton`,
-  `LocationPinIcon`, `ChevronIcon` en `app/ui/pieces.jsx`. La única excepción
-  deliberada es la flecha de envío del compositor de "¿Qué querés hacer?"
-  (`EditorialHandDrawnSubmitButton`, mismo archivo): trazo a mano en vez de
-  geométrico, usada sólo en `StartScreen` y `RequestComposer` (Gate e
-  Inicio). El resto de las flechas de volver/seguir/chevrons sigue siendo
-  geométrico — ver "Qué ya está rediseñado" más abajo.
+  simples, no doodles — ver `EditorialBackButton`, `LocationPinIcon`,
+  `ChevronIcon` en `app/ui/pieces.jsx`. La única excepción deliberada es la
+  flecha de avance de trazo a mano (`EditorialHandDrawnSubmitButton`, mismo
+  archivo): la acción de "seguir" para cualquier compositor de un solo campo
+  de texto breve — el envío de "¿Qué querés hacer?" (`RequestComposer`, Gate
+  e Inicio) y el paso del nombre en Gate. No es exclusiva del primer
+  compositor: es la flecha de avance general para pasos editoriales de un
+  campo de texto corto, y reemplazó a la vieja variante circular
+  (`EditorialCircleArrowButton`, eliminada). El resto de las flechas de
+  volver/chevrons sigue siendo geométrico — ver "Qué ya está rediseñado" más
+  abajo.
 - Todavía convive una paleta vieja (`COLORS`, oscura, acento azul) en las
   pantallas que faltan rediseñar (ver abajo). Las dos paletas nunca se
   mezclan dentro de una misma pantalla.
@@ -112,9 +116,126 @@ segundo modo a pantallas ya rediseñadas, no reskinear pantallas nuevas).
   matching, moderación) — todavía sin empezar en este prototipo.
 
 El resto de este archivo es el log cronológico de decisiones de producto y
-técnicas, del más reciente (justo abajo, con fecha del 3 de septiembre) al
+técnicas, del más reciente (justo abajo, con fecha del 4 de septiembre) al
 más viejo. Sirve como historial y como referencia de detalle — no hace
 falta leerlo entero para empezar a trabajar.
+
+## Bloque 3 — Ubicación y horario progresivos (4 de septiembre de 2026)
+
+Rediseño chico y aislado sobre la pantalla "Ubicación y horario" de
+`ContextStep` (fase `ubicacion_franja` en `app/ColabApp.jsx`), sin tocar
+`app/domain/`, el formato de storage, ni ninguna otra fase/pantalla.
+
+- **Se eliminó "Escribir otra zona":** las dos fuentes de ubicación que
+  quedan son "Usar mi ubicación aproximada" y "Elegir barrio o zona". Un
+  pedido guardado antes de este bloque con `ubicacion` de texto libre (ni
+  "Cerca mío" ni un barrio de la lista) sigue abriendo para edición y
+  mostrando ese valor tal cual, de sólo lectura (`locationMode === "legacy"`)
+  — se puede cambiar a aproximada o a un barrio, pero no volver a escribir
+  una zona libre nueva.
+- **Patrón colapsar-al-elegir:** elegir un barrio o confirmar la ubicación
+  aproximada colapsa la sección a una fila compacta ("Villa Crespo" +
+  "Cambiar"), en vez de dejar la lista o el panel de geolocalización
+  abiertos. "Cambiar" reabre las dos fuentes de nivel superior — para
+  "Elegir barrio o zona" eso incluye la lista completa, con el barrio
+  previo ya marcado. Estado nuevo y transitorio (`locationExpanded`, nunca
+  se persiste); `EditorialBigOption` suma una prop `dense` opcional y
+  aditiva (default sin cambios) para la lista de barrios, sin afectar a
+  ningún otro llamador de esa pieza compartida.
+- **"Horario" progresivo:** ya no se muestra hasta que hay una ubicación
+  válida confirmada (aproximada, barrio, o legacy) — aparece con un fade
+  (`q-fade`, la misma clase que ya usa el resto de la app) en vez de estar
+  siempre visible. Las reglas de franjas (máximo dos, "Me adapto"
+  excluyente) no cambiaron — siguen viviendo en `app/domain/timeSlots.js`.
+- **Densidad:** el título de esta fase baja a 21px (`PhaseHeading` suma un
+  prop `size` opcional, default el tamaño compartido de siempre — el resto
+  de las fases no cambia), y las filas principales de ubicación bajan de
+  15.5px a 14.5px. Los targets táctiles se mantuvieron en ≥44px.
+
+Verificado con `pnpm test` (260 pruebas, sin cambios) y `pnpm build`.
+Recorrido con Playwright en 390×844 y 1440×900: Horario oculto hasta
+confirmar ubicación, elegir barrio → colapsa → cambiar → elegir otro barrio
+→ recolapsa, reglas de horario intactas, "Continuar" siempre visible sin
+scroll raro, volver de fase y regresar conserva la selección colapsada,
+geolocalización simulada con éxito y con error (permiso denegado, con
+alternativa manual siempre disponible), y un pedido legacy con `ubicacion`
+de texto libre abriendo para edición sin errores. Sin errores de consola
+nuevos.
+
+## Bloque 2 — Limpiar el flujo de creación musical (4 de septiembre de 2026)
+
+Rediseño chico y aislado sobre el alta ya existente (texto libre → logística
+→ mundos musicales → artistas de referencia → resumen), sin tocar
+`app/domain/`, el formato de storage, ubicación/horario, la pantalla de
+artistas, chat, ofertas, perfiles ni Shows.
+
+- **Compositor con auto-grow:** `RequestComposer.jsx` (compartido por Gate y
+  Inicio) ahora arranca en una línea y crece hasta tres a medida que se
+  escribe, después scrollea — medido con el DOM real (`getComputedStyle` +
+  `scrollHeight`), no con una estimación a mano, para que la última línea
+  nunca quede recortada. La flecha de envío queda alineada con la línea de
+  escritura real (antes, con una altura fija de 1–2 filas, podía quedar
+  centrada en un bloque vacío). Tamaño de fuente fijo en 15–16px en los dos
+  modos (compacto y centrado) — este código base no usa media queries en
+  ningún lado (ver `app/index.css`), así que se mantuvo el mismo enfoque de
+  valor fijo que ya usa el resto de la app en vez de sumar un patrón
+  responsive nuevo.
+- **Una sola flecha de avance:** `EditorialHandDrawnSubmitButton` pasa a ser
+  la flecha de "seguir" general para cualquier compositor de un solo campo
+  de texto breve (antes era exclusiva del envío de "¿Qué querés hacer?").
+  Reemplaza a la vieja variante circular `EditorialCircleArrowButton` en el
+  paso del nombre de Gate; como no quedó ningún otro uso de la circular, se
+  eliminó su export de `app/ui/pieces.jsx`. El placeholder del nombre dejó
+  de rotar ejemplos de nombres de artista (`AnimatedPrompt`) — ahora es un
+  texto fijo, "Tu nombre o cómo te dicen".
+- **Se eliminó la fase "Maqueta o referencia":** después de confirmar
+  artistas (o "Todavía no tengo una referencia clara"), el alta va directo
+  al resumen. Se borraron la UI y el estado que quedaron sin uso (adjuntar
+  archivo, grabar audio, pegar un link, y sus refs/handlers) —
+  `MusicReferenceStep.jsx` no dependía de nada de esto. Un pedido guardado
+  antes de este bloque con `referenciaLink`/`archivoAdjunto`/`audioAdjunto`
+  se sigue leyendo y mostrando igual (resumen, matching): esos tres campos
+  pasan por `ContextStep` como valores de sólo lectura (no hay forma de
+  crearlos de nuevo, pero tampoco se pierden al reeditar el pedido).
+- **Resumen antes de publicar:** se sacó el aviso técnico "No pudimos usar
+  la interpretación asistida…" (un mensaje de fallback interno que nunca
+  debió mostrarse al artista — `classification.usedFallback` se sigue
+  calculando igual, sólo dejó de tener un consumidor visible) y el kicker en
+  mayúscula con el tipo de pedido (`classification.title`, redundante con el
+  texto en lenguaje natural que ya mostraba `classification.summary`
+  debajo). Debajo de "Publicar pedido" se sumó "Editar pedido" como acción
+  secundaria.
+- **Volver de verdad, no abandonar todo:** `ContextStep` calcula en cada
+  render el orden real de fases que aplican a ese pedido puntual (a partir
+  del mismo estado que ya decide qué fase mostrar) y usa los booleanos
+  "confirmado/revisado" de cada fase como una pila implícita: la flecha "‹"
+  ahora sólo des-confirma la fase inmediatamente anterior (sin tocar ningún
+  dato ya cargado) salvo en la primera fase real, donde sigue subiendo hasta
+  el compositor de texto libre con el texto intacto (`goBackToStart`, sin
+  cambios). Volver desde el resumen (o "Editar pedido" ahí mismo) ya no
+  llama a `goBackToStart` — que reiniciaba todo el alta incluida una
+  reinterpretación — sino a `goBackToLastContextPhase`, que reabre
+  `ContextStep` en la última fase real mostrada (`contextLastPhase` en
+  `App`, seteado por `ContextStep` al llegar a "done") sin tocar
+  `classification`/`context` ni publicar. Mismo principio para un pedido ya
+  publicado que se está editando: los cambios quedan en el draft en memoria
+  de `App` (`classification`/`context`, igual que ya hacía el flujo de
+  edición existente) y storage sólo se escribe al confirmar.
+- **Guardrail de "especial":** `ContextStep` ya no pregunta mundos
+  musicales ni artistas de referencia para pedidos con
+  `classification.tipo === "especial"` (sonidista, tuner, pedidos puntuales)
+  — antes se preguntaban igual que para cualquier otro tipo. La definición
+  completa de qué preguntar para pedidos puntuales (branching Música/Shows)
+  sigue siendo un bloque aparte, todavía no empezado.
+
+Verificado con `pnpm test` (260 pruebas, todas en `app/domain/` y
+`app/lib/` — sin pruebas de UI en este repo) y `pnpm build`. Recorrido
+visual con Playwright en 390px y 1440px: auto-grow del compositor vacío/1
+línea/3 líneas, Enter envía y Shift+Enter hace un salto de línea, flecha de
+mano en el paso del nombre, artistas → resumen sin la pantalla de maqueta,
+sin el aviso técnico ni el kicker en mayúscula, "Editar pedido" vuelve con
+todo lo elegido intacto, y la navegación hacia atrás artistas → mundos →
+ubicación → compositor conservando los datos en cada paso.
 
 ## Pantalla de artistas de referencia (3 de septiembre de 2026)
 
