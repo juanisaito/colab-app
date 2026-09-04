@@ -1,6 +1,6 @@
 # COLAB — contexto y roadmap
 
-Actualizado: 2 de septiembre de 2026.
+Actualizado: 4 de septiembre de 2026.
 
 ## Para quien recién llega (pensado para vos + una IA)
 
@@ -119,6 +119,72 @@ El resto de este archivo es el log cronológico de decisiones de producto y
 técnicas, del más reciente (justo abajo, con fecha del 4 de septiembre) al
 más viejo. Sirve como historial y como referencia de detalle — no hace
 falta leerlo entero para empezar a trabajar.
+
+## Bloque 4 — Pedido, propuestas y perfil profesional (4 de septiembre de 2026)
+
+Cuatro cambios chicos y acotados sobre `WaitingScreen`, `OfferDetail`
+(`app/ColabApp.jsx`), Mensajes (`app/RootScreens.jsx`) y el contenido
+simulado de productores (`app/domain/matching.js`) — sin tocar Shows, la
+navegación raíz, ni el rediseño visual de Mensajes/Perfil (siguen en
+`COLORS`, paleta vieja).
+
+- **Menú de opciones del pedido:** los dos links siempre visibles "Editar
+  pedido"/"Cancelar pedido" del header de `WaitingScreen` pasaron a un
+  botón de tres puntos (`MoreOptionsIcon`, `app/ui/pieces.jsx`) con un menú
+  desplegable propio (`role="menu"`/`role="menuitem"`, foco automático al
+  abrir, `Escape` cierra y devuelve el foco, flechas arriba/abajo navegan
+  entre ítems). Mismas condiciones de cuándo se ofrece cada acción que
+  antes (nunca con reserva confirmada, nunca con una propuesta ya elegida);
+  "Cancelar pedido" desde el menú sigue disparando la misma confirmación de
+  siempre (`confirmingCancel`), sin tocar esa lógica.
+- **Producción simulada determinística-pero-variada:** `pickProducers`
+  seguía eligiendo `pregunta`/`oferta_directa`/`ahora_no` por productor
+  100% al azar (`pickProducerPath`, `app/domain/matching.js`), así que una
+  corrida de prueba podía terminar mostrando sólo interés o sólo ofertas
+  directas. `pickProducerPathForSlot(index, total)` (misma función de
+  pesos por debajo) fija la posición 0 del pool matcheado en "pregunta" y,
+  con dos productores o más, la posición 1 en "oferta directa" — el resto
+  sigue siendo azar. `scheduleSimulatedProducers`
+  (`app/ColabApp.jsx`) es el único llamador y ahora usa esta variante.
+- **Ofertas directas visibles en Mensajes:** una oferta sin conversación
+  previa (`oferta_directa`) no aparecía en ningún lado de Mensajes — no
+  había forma de abrirla desde ahí. `MessagesScreen` ahora arma la lista
+  combinando `intereses` (como antes, `ConversationRow`) con las ofertas de
+  `request.ofertas` cuyo productor no tiene un `interes` correspondiente
+  (`DirectOfferRow`, nuevo, misma paleta oscura `COLORS` — sin adelantar el
+  rediseño de Mensajes), mostrando precio/propuesta en vez de "quiere
+  conocer mejor tu proyecto". `App` suma `handleOpenOfferFromMensajes`
+  (mismo patrón que ya existía para conversaciones) para que "volver" desde
+  ese `OfferDetail` caiga en Mensajes y no en el pedido.
+- **Perfil profesional en `OfferDetail`:** "Trabajo relevante" pasó a
+  llamarse "Experiencia" y ahora acepta una lista corta (`experiencia` en
+  `OFFER_POOL`, en vez de un string suelto `trabajo` — que se sigue
+  aceptando como fallback de un solo ítem para no romper ofertas ya
+  guardadas). Se sumaron "Equipamiento" (`equipo`, lista) y "Espacio de
+  trabajo" (`espacioFotos`, galería horizontal con visor a pantalla
+  completa) — las dos se ocultan enteras si el campo no está, sin
+  placeholder vacío, y "Espacio de trabajo" sólo se muestra si la
+  modalidad es presencial. Las fotos son 100% generadas por código
+  (`ProducerSpacePhoto`, `app/ui/pieces.jsx` — mismo truco de gradiente por
+  hash que ya usa `ProducerPhoto`), no hay ningún asset ni imagen externa.
+  Estas tres secciones se reordenaron para ir después de "Zona y
+  disponibilidad" y antes de "Señales de confianza", sin mover precio,
+  incluye ni disponibilidad.
+
+Verificado con `pnpm test` (260 pruebas, sin cambios) y `pnpm build`.
+Recorrido con Playwright (Chromium) en 390×844 y 1440×900: menú de
+opciones con mouse y teclado completo (Tab, Enter, flechas, Escape),
+editar y cancelar desde el menú funcionan igual que antes; un pedido
+publicado de punta a punta en la app real confirmó en el mismo storage un
+productor con pregunta y otro con oferta directa (posiciones 0 y 1); una
+oferta directa se abrió desde Mensajes y "volver" cayó en Mensajes,
+mientras que la misma oferta abierta desde el pedido volvió al pedido; una
+propuesta con equipo y fotos mostró esas secciones con la galería
+abriendo/cerrando bien, una sin esos campos las ocultó del todo, y una
+oferta "legacy" (sólo `trabajo`, sin los campos nuevos) abrió sin errores.
+Sin overflow horizontal ni botones tapados en ninguno de los dos anchos.
+Sin errores de consola nuevos (sólo el 404 esperado de `/api/interpret`,
+que ya existía).
 
 ## Bloque 3 — Ubicación y horario progresivos (4 de septiembre de 2026)
 

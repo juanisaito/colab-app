@@ -5,10 +5,10 @@ import { COLORS, EDITORIAL } from "./theme.js";
 import BottomNav from "./BottomNav.jsx";
 import { HomeScreen, OrdersScreen, MessagesScreen, ProfileScreen, HelpScreen, PrivacyScreen, EditNameScreen } from "./RootScreens.jsx";
 import {
-  PrimaryButton, TextLink, UnderlineField, Screen, ProducerPhoto,
+  PrimaryButton, TextLink, UnderlineField, Screen, ProducerPhoto, ProducerSpacePhoto,
   EditorialPrimaryButton, EditorialSecondaryButton, EditorialTextLink, EditorialUnderlineField, editorialUnderlineInputStyle, HandDrawnUnderline,
-  EditorialLabel, EditorialBigOption, EditorialBackButton, EditorialHandDrawnSubmitButton, EditorialThinkingDots,
-  LocationPinIcon, ChevronIcon,
+  EditorialLabel, EditorialBigOption, EditorialBackButton, EditorialCloseButton, EditorialHandDrawnSubmitButton, EditorialThinkingDots,
+  LocationPinIcon, ChevronIcon, MoreOptionsIcon,
   DoodlePathsDiverging, DoodlePinClock, DoodleSoundStars, DoodleCheck, DoodleSpeechBubble,
 } from "./ui/pieces.jsx";
 import { uid } from "./lib/id.js";
@@ -30,7 +30,7 @@ import { findMentionedMusicReferenceIds } from "./domain/musicReferenceMentions.
 import MusicReferenceStep from "./features/request/MusicReferenceStep.jsx";
 import { interpretRequest } from "./domain/interpretation.js";
 import { calculateArtistFinalPrice } from "./domain/pricing.js";
-import { pickProducers, getCuratedAlternatives, pickProducerPath, buildOfferFrom, findProducerByName } from "./domain/matching.js";
+import { pickProducers, getCuratedAlternatives, pickProducerPathForSlot, buildOfferFrom, findProducerByName } from "./domain/matching.js";
 import { sanitizeContextForClassification } from "./domain/contextSanitize.js";
 import {
   TIME_SLOT_OPTIONS, FLEXIBLE_TIME_SLOT,
@@ -1434,6 +1434,14 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
   const [enviandoAclaracion, setEnviandoAclaracion] = useState(false);
   const [solicitando, setSolicitando] = useState(null);
   const [actionError, setActionError] = useState(null);
+  // Bloque 4: "Editar pedido"/"Cancelar pedido" pasaron de dos links siempre
+  // visibles a un menú discreto (tres puntos) — mismas dos acciones, mismas
+  // condiciones de cuándo se ofrecen (ver el bloque estado==="cancelado" /
+  // "reservado" / confirmingCancel / showBookingArea más abajo), sólo detrás
+  // de un toque extra. optionsMenuOpen es puramente de UI, nunca se persiste.
+  const [optionsMenuOpen, setOptionsMenuOpen] = useState(false);
+  const optionsMenuRef = useRef(null);
+  const optionsButtonRef = useRef(null);
 
   const poll = useCallback(async () => {
     const mine = await getRequestById(request.id);
@@ -1460,6 +1468,43 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
     const iv = setInterval(poll, 1500);
     return () => clearInterval(iv);
   }, [poll]);
+
+  // Cerrar el menú de opciones del pedido al tocar afuera, con Escape (foco
+  // vuelve al botón que lo abrió), y enfocar el primer ítem al abrirlo — el
+  // resto de la navegación por teclado (Tab entre ítems) sale gratis porque
+  // son <button> reales dentro del menú.
+  useEffect(() => {
+    if (!optionsMenuOpen) return;
+    const first = optionsMenuRef.current?.querySelector('[role="menuitem"]');
+    first?.focus();
+    function handlePointerDown(e) {
+      if (optionsMenuRef.current && !optionsMenuRef.current.contains(e.target) && optionsButtonRef.current && !optionsButtonRef.current.contains(e.target)) {
+        setOptionsMenuOpen(false);
+      }
+    }
+    function handleKeyDown(e) {
+      if (e.key === "Escape") {
+        setOptionsMenuOpen(false);
+        optionsButtonRef.current?.focus();
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [optionsMenuOpen]);
+
+  function handleOptionsMenuKeyDown(e) {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const items = Array.from(optionsMenuRef.current?.querySelectorAll('[role="menuitem"]') || []);
+    if (items.length === 0) return;
+    const idx = items.indexOf(document.activeElement);
+    const next = e.key === "ArrowDown" ? (idx + 1) % items.length : (idx - 1 + items.length) % items.length;
+    items[next]?.focus();
+  }
 
   const feedVacio = intereses.length === 0 && ofertas.length === 0;
   // Cubre tanto "propuesta_elegida" (coordinando la reserva) como
@@ -1526,9 +1571,51 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
           // disponible antes de elegir una propuesta (ver puedeCancelarse).
           null
         ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <EditorialTextLink onClick={onEdit}>Editar pedido</EditorialTextLink>
-            <EditorialTextLink onClick={() => setConfirmingCancel(true)}>Cancelar pedido</EditorialTextLink>
+          <div style={{ display: "flex", justifyContent: "flex-end", position: "relative" }}>
+            <button
+              ref={optionsButtonRef}
+              type="button"
+              aria-label="Opciones del pedido"
+              aria-haspopup="menu"
+              aria-expanded={optionsMenuOpen}
+              onClick={() => setOptionsMenuOpen((v) => !v)}
+              className="press"
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, margin: "-6px -6px -6px 0", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+            >
+              <MoreOptionsIcon />
+            </button>
+            {optionsMenuOpen && (
+              <div
+                ref={optionsMenuRef}
+                role="menu"
+                aria-label="Opciones del pedido"
+                onKeyDown={handleOptionsMenuKeyDown}
+                style={{
+                  position: "absolute", top: "calc(100% + 6px)", right: 0, minWidth: 176, zIndex: 5,
+                  background: EDITORIAL.bg, border: `1px solid ${EDITORIAL.border}`, borderRadius: 4,
+                  boxShadow: "0 8px 22px rgba(27,24,21,0.14)", padding: 4,
+                }}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setOptionsMenuOpen(false); onEdit(); }}
+                  className="press"
+                  style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", borderRadius: 3, padding: "10px 12px", fontFamily: EDITORIAL.fontSans, fontSize: 13.5, color: EDITORIAL.carbon, cursor: "pointer" }}
+                >
+                  Editar pedido
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setOptionsMenuOpen(false); setConfirmingCancel(true); }}
+                  className="press"
+                  style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", borderRadius: 3, padding: "10px 12px", fontFamily: EDITORIAL.fontSans, fontSize: 13.5, color: EDITORIAL.error, cursor: "pointer" }}
+                >
+                  Cancelar pedido
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1655,6 +1742,25 @@ function WaitingScreen({ request, onOpenInteres, onSelectOffer, onCancel, onEdit
 
 function OfferDetail({ offer, onBack, onChoose, onMessage, choosing, messaging, chooseError }) {
   const precioFinal = calculateArtistFinalPrice(offer.producerAmount);
+  // Bloque 4: `experiencia` es el campo vigente (lista); `trabajo` es la
+  // forma vieja (string suelto) que puede seguir viviendo tal cual en una
+  // oferta ya guardada en storage desde antes de este bloque — se envuelve
+  // en un array de un solo elemento para que el render de abajo sea uno solo
+  // para las dos formas. Sin ninguna de las dos, la sección no se muestra.
+  const experiencia = offer.experiencia || (offer.trabajo ? [offer.trabajo] : []);
+  const equipo = offer.equipo || [];
+  const espacioFotos = offer.modalidadTipo === "Presencial" ? (offer.espacioFotos || []) : [];
+  const [openPhotoIndex, setOpenPhotoIndex] = useState(null);
+
+  useEffect(() => {
+    if (openPhotoIndex === null) return;
+    function handleKeyDown(e) {
+      if (e.key === "Escape") setOpenPhotoIndex(null);
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [openPhotoIndex]);
+
   return (
     <div className="q-fade" style={{ display: "flex", flexDirection: "column", height: "100%", background: EDITORIAL.bg }}>
       <div style={{ padding: "20px 22px 0", minHeight: 20 }}>
@@ -1662,6 +1768,7 @@ function OfferDetail({ offer, onBack, onChoose, onMessage, choosing, messaging, 
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 22px 12px" }}>
+        {/* Profesional y encaje. */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
           <ProducerPhoto name={offer.productor} width={52} height={52} radius={12} />
           <div>
@@ -1670,13 +1777,8 @@ function OfferDetail({ offer, onBack, onChoose, onMessage, choosing, messaging, 
           </div>
         </div>
 
-        {/* Punto 9: la propuesta y el trabajo relacionado van antes que el precio. */}
+        {/* Punto 9: la propuesta va antes que el precio. */}
         <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 15, lineHeight: 1.55, margin: "18px 0 20px" }}>{offer.propuesta}</p>
-
-        <div style={{ marginBottom: 18 }}>
-          <EditorialLabel>Trabajo relevante</EditorialLabel>
-          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 13.5, margin: 0 }}>{offer.trabajo}</p>
-        </div>
 
         <div style={{ marginBottom: 20 }}>
           <EditorialLabel>Su sonido</EditorialLabel>
@@ -1690,11 +1792,13 @@ function OfferDetail({ offer, onBack, onChoose, onMessage, choosing, messaging, 
 
         <div style={{ height: 1, background: EDITORIAL.border, margin: "0 0 18px" }} />
 
+        {/* Precio. */}
         <div style={{ marginBottom: 18 }}>
           <div style={{ fontFamily: EDITORIAL.fontMono, fontSize: 26, color: EDITORIAL.carbon, fontWeight: 600 }}>{formatMoney(precioFinal)}</div>
           <div style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5, marginTop: 2 }}>{offer.unidad}</div>
         </div>
 
+        {/* Qué incluye. */}
         <div style={{ marginBottom: 18 }}>
           <EditorialLabel>Qué incluye</EditorialLabel>
           <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 13.5, margin: 0 }}>{offer.incluye}</p>
@@ -1702,6 +1806,7 @@ function OfferDetail({ offer, onBack, onChoose, onMessage, choosing, messaging, 
 
         <div style={{ height: 1, background: EDITORIAL.border, margin: "0 0 18px" }} />
 
+        {/* Disponibilidad. */}
         <div style={{ marginBottom: 18 }}>
           <EditorialLabel>Zona y disponibilidad</EditorialLabel>
           <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 13.5, margin: "0 0 4px" }}>
@@ -1710,6 +1815,62 @@ function OfferDetail({ offer, onBack, onChoose, onMessage, choosing, messaging, 
           <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: 0 }}>{offer.disponibilidad}</p>
         </div>
 
+        {(experiencia.length > 0 || equipo.length > 0 || espacioFotos.length > 0) && (
+          <div style={{ height: 1, background: EDITORIAL.border, margin: "0 0 18px" }} />
+        )}
+
+        {/* Bloque 4: experiencia / equipamiento / espacio — cada sección se
+            oculta del todo si el offer no trae ese campo (nunca un
+            placeholder vacío), para no romper con ofertas viejas guardadas
+            antes de este bloque. */}
+        {experiencia.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <EditorialLabel>Experiencia</EditorialLabel>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {experiencia.map((item, i) => (
+                <p key={i} style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 13.5, lineHeight: 1.4, margin: 0 }}>{item}</p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {equipo.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <EditorialLabel>Equipamiento</EditorialLabel>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              {equipo.map((item, i) => (
+                <span key={i} style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 13.5, lineHeight: 1.4 }}>{item}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {espacioFotos.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <EditorialLabel>Espacio de trabajo</EditorialLabel>
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
+              {espacioFotos.map((caption, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setOpenPhotoIndex(i)}
+                  className="press"
+                  style={{ flexShrink: 0, background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: 6 }}
+                >
+                  <ProducerSpacePhoto
+                    seed={`${offer.productor}-espacio-${i}`}
+                    width={112}
+                    height={84}
+                    radius={6}
+                    alt={`Espacio de trabajo de ${offer.productor}: ${caption}`}
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Confianza. */}
         <div style={{ marginBottom: 8 }}>
           <EditorialLabel>Señales de confianza</EditorialLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -1731,6 +1892,32 @@ function OfferDetail({ offer, onBack, onChoose, onMessage, choosing, messaging, 
           </EditorialPrimaryButton>
         </div>
       </div>
+
+      {openPhotoIndex !== null && espacioFotos[openPhotoIndex] !== undefined && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Foto ampliada — ${espacioFotos[openPhotoIndex]}`}
+          onClick={() => setOpenPhotoIndex(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(27,24,21,0.94)", zIndex: 20, display: "flex", flexDirection: "column" }}
+        >
+          <div style={{ padding: "20px 22px 0" }} onClick={(e) => e.stopPropagation()}>
+            <EditorialCloseButton onClick={() => setOpenPhotoIndex(null)} color={EDITORIAL.bg} ariaLabel="Cerrar foto" />
+          </div>
+          <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={(e) => e.stopPropagation()}>
+            <ProducerSpacePhoto
+              seed={`${offer.productor}-espacio-${openPhotoIndex}`}
+              width={280}
+              height={210}
+              radius={8}
+              alt={`Espacio de trabajo de ${offer.productor}: ${espacioFotos[openPhotoIndex]}`}
+            />
+          </div>
+          <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.bg, fontSize: 13, textAlign: "center", padding: "0 22px 26px", margin: 0 }}>
+            {espacioFotos[openPhotoIndex]}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1766,6 +1953,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("inicio");
   const [startedCreating, setStartedCreating] = useState(false);
   const [conversationOpenedFromMensajes, setConversationOpenedFromMensajes] = useState(false);
+  // Bloque 4: mismo patrón que conversationOpenedFromMensajes, pero para una
+  // oferta directa (sin interés/conversación previa) abierta desde Mensajes
+  // — al volver de OfferDetail hay que ir a la lista de Mensajes, no al
+  // detalle del pedido (ver handleOpenOfferFromMensajes más abajo).
+  const [offerOpenedFromMensajes, setOfferOpenedFromMensajes] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [editingProfileName, setEditingProfileName] = useState(false);
@@ -2037,7 +2229,7 @@ export default function App() {
     productores.forEach((p, i) => {
       const t = setTimeout(async () => {
         if (!(await isRequestStillOpen(req.id))) return;
-        const path = pickProducerPath();
+        const path = pickProducerPathForSlot(i, productores.length);
         if (path === "ahora_no") return;
         if (path === "oferta_directa") {
           const oferta = buildOfferFrom(p);
@@ -2316,6 +2508,19 @@ export default function App() {
     setOpenInteres(interesObj);
   }
 
+  // Bloque 4: mismo patrón que handleOpenConversationFromMensajes, para una
+  // oferta directa (sin `interes` previo) listada en Mensajes. `request` se
+  // necesita igual (elegir/mensajear la oferta escribe contra ese id), pero
+  // volver del detalle debe ir a Mensajes, no al pedido — ver el onBack de
+  // OfferDetail más abajo.
+  function handleOpenOfferFromMensajes(requestObj, offerObj) {
+    setClassification(null);
+    setContext(null);
+    setRequest(requestObj);
+    setOfferOpenedFromMensajes(true);
+    setSelectedOffer(offerObj);
+  }
+
   // Sale del detalle de un pedido (WaitingScreen). No alcanza con limpiar
   // `request`: si se venía de publicar o actualizar recién, `classification`/
   // `context` siguen con el valor del pedido que se acaba de guardar (nunca
@@ -2387,7 +2592,28 @@ export default function App() {
     body = <Gate onDone={handleGateDone} />;
   } else if (selectedOffer) {
     offerDetailActive = true;
-    body = <OfferDetail offer={selectedOffer} choosing={choosing} messaging={messaging} chooseError={chooseError} onBack={() => { setSelectedOffer(null); setChooseError(null); }} onMessage={() => handleMessageOffer(selectedOffer)} onChoose={() => handleChoose(selectedOffer)} />;
+    body = (
+      <OfferDetail
+        offer={selectedOffer}
+        choosing={choosing}
+        messaging={messaging}
+        chooseError={chooseError}
+        onBack={() => {
+          setSelectedOffer(null);
+          setChooseError(null);
+          // Si esta oferta se abrió desde Mensajes (oferta directa, sin
+          // conversación previa), volver debe ir a Mensajes — no quedar en
+          // WaitingScreen, que es a donde cae por defecto (`request` sigue
+          // seteado) cuando se abrió desde el pedido.
+          if (offerOpenedFromMensajes) {
+            setRequest(null);
+            setOfferOpenedFromMensajes(false);
+          }
+        }}
+        onMessage={() => handleMessageOffer(selectedOffer)}
+        onChoose={() => handleChoose(selectedOffer)}
+      />
+    );
   } else if (openInteres) {
     // Estas dos props sólo controlan la UI (deshabilitar la caja de texto,
     // mostrar el aviso correcto) — la validación real vuelve a hacerse desde
@@ -2416,7 +2642,15 @@ export default function App() {
       <WaitingScreen
         request={request}
         onOpenInteres={setOpenInteres}
-        onSelectOffer={setSelectedOffer}
+        onSelectOffer={(offer) => {
+          // Abrir una oferta desde el pedido mismo (no desde Mensajes): si
+          // offerOpenedFromMensajes había quedado en true por una apertura
+          // anterior sin resetear (ver handleOpenOfferFromMensajes), hay que
+          // limpiarlo acá para que el onBack de OfferDetail no mande por
+          // error a Mensajes en vez de quedarse en este pedido.
+          setOfferOpenedFromMensajes(false);
+          setSelectedOffer(offer);
+        }}
         onCancel={handleCancel}
         onEdit={handleEditRequest}
         onAclaracion={handleAclaracion}
@@ -2477,7 +2711,7 @@ export default function App() {
   } else if (activeTab === "pedidos") {
     body = <OrdersScreen artistName={profile.name} onOpenRequest={handleOpenExistingRequest} onCreate={() => setActiveTab("inicio")} />;
   } else if (activeTab === "mensajes") {
-    body = <MessagesScreen artistName={profile.name} onOpenConversation={handleOpenConversationFromMensajes} onGoToOrders={() => setActiveTab("pedidos")} />;
+    body = <MessagesScreen artistName={profile.name} onOpenConversation={handleOpenConversationFromMensajes} onOpenOffer={handleOpenOfferFromMensajes} onGoToOrders={() => setActiveTab("pedidos")} />;
   } else if (activeTab === "perfil") {
     body = (
       <ProfileScreen

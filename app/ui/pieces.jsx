@@ -138,7 +138,10 @@ export function Screen({ topSlot, children, className }) {
   );
 }
 
-function hashHue(str) {
+// Hash determinístico simple (mismo string siempre da el mismo hue) — lo usa
+// ProducerPhoto y, más abajo, ProducerSpacePhoto. Exportado porque las dos
+// piezas lo necesitan, no porque haya cambiado su comportamiento.
+export function hashHue(str) {
   let h = 0;
   for (let i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h);
   return Math.abs(h) % 360;
@@ -154,6 +157,31 @@ export function ProducerPhoto({ name, width = 44, height = 44, radius = 10 }) {
         borderRadius: radius,
         flexShrink: 0,
         background: `radial-gradient(circle at 30% 25%, hsl(${hue},65%,42%), hsl(${(hue + 35) % 360},50%,16%) 78%)`,
+      }}
+    />
+  );
+}
+
+// Bloque 4 — "Espacio de trabajo" en OfferDetail. Misma técnica que
+// ProducerPhoto (gradiente determinado por hash del string semilla): son
+// imágenes 100% generadas por código a partir de `seed`, nunca una foto real
+// ni un asset externo — no hay ningún archivo de imagen involucrado. Ángulo y
+// paradas de color distintos a ProducerPhoto a propósito, para que se lea
+// como una pieza visual distinta (una "foto" de espacio, no un avatar).
+// `alt` va como aria-label (role="img") porque es un div, no un <img>.
+export function ProducerSpacePhoto({ seed, width = 120, height = 90, radius = 8, alt, style }) {
+  const hue = hashHue(seed);
+  return (
+    <div
+      role="img"
+      aria-label={alt || "Espacio de trabajo"}
+      style={{
+        width,
+        height,
+        borderRadius: radius,
+        flexShrink: 0,
+        background: `radial-gradient(circle at 72% 22%, hsl(${(hue + 20) % 360},55%,46%), hsl(${hue},60%,20%) 75%)`,
+        ...style,
       }}
     />
   );
@@ -409,6 +437,53 @@ export function LocationPinIcon({ size = 18, color = EDITORIAL.carbon }) {
       <path d="M12 21c4-4.5 7-8.14 7-11.5A7 7 0 0 0 5 9.5C5 12.86 8 16.5 12 21Z" stroke={color} strokeWidth={1.6} strokeLinejoin="round" />
       <circle cx="12" cy="9.5" r="2.4" stroke={color} strokeWidth={1.6} />
     </svg>
+  );
+}
+
+// Bloque 4: ícono "más opciones" (tres puntos de trazo fino, no relleno) —
+// mismo lenguaje geométrico que EditorialBackButton/ChevronIcon. Sólo el
+// ícono; el botón que lo envuelve y el menú que abre viven donde se usan
+// (hoy, el menú de opciones del pedido en WaitingScreen, ColabApp.jsx).
+export function MoreOptionsIcon({ size = 18, color = EDITORIAL.carbon }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="5.5" r="1.6" stroke={color} strokeWidth={1.6} />
+      <circle cx="12" cy="12" r="1.6" stroke={color} strokeWidth={1.6} />
+      <circle cx="12" cy="18.5" r="1.6" stroke={color} strokeWidth={1.6} />
+    </svg>
+  );
+}
+
+// Bloque 4: botón "cerrar" icon-only (X geométrica, mismo trazo/grosor que
+// EditorialBackButton) para overlays/modales — hoy sólo el visor de fotos de
+// "Espacio de trabajo" en OfferDetail. A diferencia de EditorialBackButton no
+// trae el offset negativo (pensado para quedar pegado al borde de un header):
+// éste se posiciona por el contenedor que lo usa.
+export function EditorialCloseButton({ onClick, disabled, ariaLabel = "Cerrar", color = EDITORIAL.carbon }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      className="press"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 44,
+        height: 44,
+        background: "none",
+        border: "none",
+        padding: 0,
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.4 : 1,
+      }}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M6 6 L18 18" stroke={color} strokeWidth={2} strokeLinecap="round" />
+        <path d="M18 6 L6 18" stroke={color} strokeWidth={2} strokeLinecap="round" />
+      </svg>
+    </button>
   );
 }
 

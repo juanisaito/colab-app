@@ -18,7 +18,9 @@ export const OFFER_POOL = {
       portfolioBlurb: "Grabación de voces para 3 EPs independientes en el último año.",
       porQueEncaja: "Trabaja seguido con voces urbanas y tiene estudio propio en tu zona.",
       pregunta: "Hola! Vi tu pedido — ¿ya tenés una base grabada o arrancamos de cero con la voz?",
-      trabajo: "Grabación de voces — EP independiente, 2025",
+      experiencia: ["Grabación de voces — EP independiente, 2025", "Grabación de coros — separata para banda tributo, 2024"],
+      equipo: ["Neumann U87", "Interfaz Universal Audio Apollo Twin", "Preamplificador Neve 1073 (réplica)", "Monitores Yamaha HS8"],
+      espacioFotos: ["Cabina de grabación", "Sala de control", "Rack de outboard"],
       unidad: "Sesión inicial",
       incluye: "3 horas de grabación + edición básica de voces",
       producerAmount: 45000,
@@ -38,7 +40,9 @@ export const OFFER_POOL = {
       portfolioBlurb: "Especializada en placement de voces para pop urbano.",
       porQueEncaja: "Su estudio está tratado acústicamente y tiene turnos hoy mismo.",
       pregunta: "Hola! ¿Tenés referencia de algún tema o artista para orientar el tratamiento de la voz?",
-      trabajo: "Grabación y producción — single 'Marea'",
+      experiencia: ["Grabación y producción — single 'Marea'"],
+      equipo: ["Micrófono AKG C414", "Interfaz Focusrite Scarlett 18i20", "Tratamiento acústico a medida"],
+      espacioFotos: ["Sala principal", "Zona de escucha", "Detalle del tratamiento acústico", "Cabina vocal"],
       unidad: "Sesión inicial",
       incluye: "3 horas de grabación + placement de voces",
       producerAmount: 52000,
@@ -58,7 +62,9 @@ export const OFFER_POOL = {
       portfolioBlurb: "Grabó banda completa para un LP de rock independiente en 2024.",
       porQueEncaja: "Tiene experiencia grabando bandas en vivo, no solo voces sueltas.",
       pregunta: "¿Vas a venir solo o con más gente de la banda para la sesión?",
-      trabajo: "Grabación de banda — LP 'Marte', 2024",
+      experiencia: ["Grabación de banda — LP 'Marte', 2024", "Grabación en vivo — sesión acústica para EP compilado, 2023"],
+      equipo: ["Consola Allen & Heath", "Set de microfonía para batería (Shure/AKG)", "Amplificadores de guitarra propios"],
+      espacioFotos: ["Sala de ensayo/grabación", "Zona de amplificadores"],
       unidad: "Sesión inicial",
       incluye: "3 horas de grabación + mezcla de referencia",
       producerAmount: 48000,
@@ -80,7 +86,9 @@ export const OFFER_POOL = {
       portfolioBlurb: "Produjo un EP de fusión trap/rock en 2024.",
       porQueEncaja: "Le gusta trabajar cruzando géneros distintos, como plantea tu pedido.",
       pregunta: "Me copa la idea — ¿tenés alguna letra o idea de melodía arrancada, o salimos de cero?",
-      trabajo: "Producción — EP fusión trap/rock, 2024",
+      experiencia: ["Producción — EP fusión trap/rock, 2024"],
+      equipo: ["Estación MIDI con controlador Native Instruments", "Monitores Adam Audio T7V", "Librería de samples propia"],
+      espacioFotos: ["Sala de producción", "Escritorio de trabajo"],
       unidad: "Sesión inicial",
       incluye: "3 horas de composición y producción exploratoria",
       producerAmount: 60000,
@@ -100,7 +108,11 @@ export const OFFER_POOL = {
       portfolioBlurb: "Produjo un single de pop urbano lanzado en 2025.",
       porQueEncaja: "Arma la base instrumental completa, no solo mezcla lo que ya existe.",
       pregunta: "¿Tenés en mente algún tempo o clima particular, o lo definimos juntos en la sesión?",
-      trabajo: "Producción — single 'Ya no vuelvo', 2025",
+      // A propósito sin `equipo` ni `espacioFotos`: trabaja presencial pero sin
+      // un estudio propio fijo para mostrar (coordina el lugar caso a caso) —
+      // sirve además para probar que OfferDetail oculta esas secciones del
+      // todo cuando no hay datos, sin dejar un placeholder vacío.
+      experiencia: ["Producción — single 'Ya no vuelvo', 2025"],
       unidad: "Sesión inicial",
       incluye: "3 horas de producción + base instrumental",
       producerAmount: 65000,
@@ -121,7 +133,7 @@ export const OFFER_POOL = {
       portfolioBlurb: "Mezcló 'Horizonte', un lanzamiento independiente reciente.",
       porQueEncaja: "Trabaja bien la mezcla de bandas alternativas/indie.",
       pregunta: "¿Tenés los stems por separado o me pasás el proyecto completo?",
-      trabajo: "Mezcla — 'Horizonte', lanzamiento independiente",
+      experiencia: ["Mezcla — 'Horizonte', lanzamiento independiente"],
       unidad: "Mezcla completa",
       incluye: "Mezcla + 2 rondas de correcciones",
       producerAmount: 38000,
@@ -140,7 +152,7 @@ export const OFFER_POOL = {
       portfolioBlurb: "Mezcla mixtapes urbanas hace 4 años.",
       porQueEncaja: "Entiende el peso que necesita el bajo en trap/urbano.",
       pregunta: "¿Tenés alguna mezcla de referencia que te guste para el volumen de la voz?",
-      trabajo: "Mezcla — mixtape independiente, 2025",
+      experiencia: ["Mezcla — mixtape independiente, 2025", "Mezcla — EP colaborativo urbano, 2024"],
       unidad: "Mezcla completa",
       incluye: "Mezcla + 1 ronda de correcciones",
       producerAmount: 42000,
@@ -161,7 +173,9 @@ export const OFFER_POOL = {
       portfolioBlurb: "Sonido en vivo para shows chicos y medianos hace 6 años.",
       porQueEncaja: "Cubre eventos de cualquier estilo, no solo un género particular.",
       pregunta: "Contame un poco del evento — ¿cuánta gente esperan y qué tipo de lugar es?",
-      trabajo: "Operación de sonido — ciclo de bares, 2025",
+      // Sin `equipo`/`espacioFotos`: zona "A coordinar" — no tiene un espacio
+      // propio fijo, trabaja en el lugar del evento.
+      experiencia: ["Operación de sonido — ciclo de bares, 2025"],
       unidad: "Servicio puntual",
       incluye: "Armado, operación y desarme de equipo",
       producerAmount: 40000,
@@ -232,9 +246,37 @@ export function pickProducerPath() {
   return "pregunta";
 }
 
+// Bloque 4: pickProducerPath es 100% azar, lo que significa que un recorrido
+// manual (o de demo) puede terminar mostrando sólo pregunta primero, sólo
+// oferta directa, o ninguna de las dos — no hay forma de verificar "las dos
+// clases de contacto existen" sin repetir la corrida hasta tener suerte.
+// pickProducerPathForSlot no reemplaza el azar en general: sólo fija la
+// primera posición del pool matcheado en "pregunta" y, si hay al menos dos
+// productores, la segunda en "oferta_directa" — el resto de las posiciones
+// sigue usando pickProducerPath tal cual. Alcanza para que cualquier pedido
+// con al menos un productor matcheado produzca de forma reproducible las dos
+// clases de contacto (cuando hay dos o más productores) sin tocar los pesos
+// ni el resto de la lógica de matching.
+export function pickProducerPathForSlot(index, total) {
+  if (index === 0) return "pregunta";
+  if (index === 1 && total >= 2) return "oferta_directa";
+  return pickProducerPath();
+}
+
 export function buildOfferFrom(producerData) {
-  const { productor, zona, modalidadTipo, disponibilidad, spotifyConnected, topArtists, trabajo, unidad, incluye, producerAmount, propuesta, confianza } = producerData;
-  return { id: uid(), productor, zona, modalidadTipo, disponibilidad, spotifyConnected, topArtists, trabajo, unidad, incluye, producerAmount, propuesta, confianza, createdAt: new Date().toISOString() };
+  const { productor, zona, modalidadTipo, disponibilidad, spotifyConnected, topArtists, trabajo, experiencia, equipo, espacioFotos, unidad, incluye, producerAmount, propuesta, confianza } = producerData;
+  // `experiencia` (lista) es el campo vigente; `trabajo` (string suelto) es
+  // el campo previo a este bloque — se sigue aceptando acá por si algo
+  // todavía construye una oferta con esa forma antigua, envolviéndolo en un
+  // array de un solo elemento. Las ofertas ya guardadas en storage desde
+  // antes de este bloque conservan `trabajo` tal cual (no vuelven a pasar
+  // por acá) — OfferDetail sabe leer las dos formas.
+  const experienciaFinal = experiencia || (trabajo ? [trabajo] : undefined);
+  return {
+    id: uid(), productor, zona, modalidadTipo, disponibilidad, spotifyConnected, topArtists,
+    experiencia: experienciaFinal, equipo, espacioFotos,
+    unidad, incluye, producerAmount, propuesta, confianza, createdAt: new Date().toISOString(),
+  };
 }
 
 export function findProducerByName(name) {

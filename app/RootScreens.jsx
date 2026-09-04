@@ -4,6 +4,8 @@ import { Screen, TextLink, PrimaryButton, UnderlineField, ProducerPhoto, HandDra
 import RequestComposer from "./features/request/RequestComposer.jsx";
 import { getAllRequests } from "./lib/storage.js";
 import { ESTADO_LABELS, esPropuestaElegida, esActivo, tieneProfesionalElegido, requestNeedsArtistInput } from "./domain/estado.js";
+import { formatMoney } from "./lib/format.js";
+import { calculateArtistFinalPrice } from "./domain/pricing.js";
 
 /* ============================================================
    Pantallas raíz de la navegación (Inicio / Pedidos / Mensajes / Perfil)
@@ -294,20 +296,67 @@ function ConversationRow({ request, interes, onOpen }) {
   );
 }
 
-export function MessagesScreen({ artistName, onOpenConversation, onGoToOrders }) {
+// Bloque 4: una oferta directa (`oferta_directa` en pickProducerPathForSlot,
+// domain/matching.js) no tiene ningún `interes`/conversación previo — antes
+// no aparecía en Mensajes en absoluto, sin forma de abrirla desde acá. Fila
+// propia, misma paleta oscura (COLORS) que ConversationRow — nada de
+// EDITORIAL acá, ese rediseño es un bloque aparte. La copia muestra la
+// propuesta y el precio en vez de "quiere conocer mejor tu proyecto" (no hay
+// pregunta que mostrar: la oferta llegó directa).
+function DirectOfferRow({ request, offer, onOpen }) {
+  const pending = request.chosenOfferId !== offer.id;
+  return (
+    <button
+      onClick={() => onOpen(request, offer)}
+      className="press"
+      style={{ display: "flex", gap: 12, width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${COLORS.border}`, padding: "14px 2px", cursor: "pointer", alignItems: "flex-start" }}
+    >
+      <ProducerPhoto name={offer.productor} width={40} height={40} radius={9} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 14, color: COLORS.text }}>{offer.productor}</span>
+          <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: COLORS.muted, flexShrink: 0 }}>{formatWhen(offer.createdAt)}</span>
+        </div>
+        <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 11.5, color: COLORS.muted, margin: "2px 0 3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {request.resumen}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {pending && <span style={{ width: 7, height: 7, borderRadius: "50%", background: COLORS.accent, flexShrink: 0 }} />}
+          <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12.5, color: pending ? COLORS.text : COLORS.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {offer.propuesta}
+          </span>
+        </div>
+        <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 11, color: COLORS.accent, marginTop: 3 }}>
+          Propuesta directa · {formatMoney(calculateArtistFinalPrice(offer.producerAmount))}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+export function MessagesScreen({ artistName, onOpenConversation, onOpenOffer, onGoToOrders }) {
   const requests = useMyRequests(artistName);
-  const conversations = requests
-    .flatMap((r) => (r.intereses || []).map((it) => ({ request: r, interes: it })))
-    .sort((a, b) => {
-      const at = a.interes.mensajes?.length ? a.interes.mensajes[a.interes.mensajes.length - 1].createdAt : a.interes.createdAt;
-      const bt = b.interes.mensajes?.length ? b.interes.mensajes[b.interes.mensajes.length - 1].createdAt : b.interes.createdAt;
-      return new Date(bt).getTime() - new Date(at).getTime();
-    });
+  const conversationItems = requests.flatMap((r) =>
+    (r.intereses || []).map((it) => ({
+      kind: "interes", request: r, interes: it,
+      at: it.mensajes?.length ? it.mensajes[it.mensajes.length - 1].createdAt : it.createdAt,
+    }))
+  );
+  // Ofertas sin conversación: cualquier oferta cuyo productor no tenga un
+  // `interes` en este mismo pedido (una oferta directa siempre entra por
+  // acá; una que nació de una conversación ya tiene su fila via ConversationRow).
+  const directOfferItems = requests.flatMap((r) => {
+    const productoresConInteres = new Set((r.intereses || []).map((it) => it.productor));
+    return (r.ofertas || [])
+      .filter((o) => !productoresConInteres.has(o.productor))
+      .map((o) => ({ kind: "oferta", request: r, oferta: o, at: o.createdAt }));
+  });
+  const items = [...conversationItems, ...directOfferItems].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <RootHeader title="Mensajes" />
-      {conversations.length === 0 ? (
+      {items.length === 0 ? (
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "safe center", alignItems: "center", textAlign: "center", padding: "0 26px 26px" }}>
           <p style={{ ...mutedSmall, marginBottom: 18 }}>
             Tus conversaciones van a aparecer acá cuando un profesional quiera preguntarte algo o enviarte una propuesta.
@@ -316,9 +365,13 @@ export function MessagesScreen({ artistName, onOpenConversation, onGoToOrders })
         </div>
       ) : (
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 22px 26px" }}>
-          {conversations.map(({ request, interes }) => (
-            <ConversationRow key={interes.id} request={request} interes={interes} onOpen={onOpenConversation} />
-          ))}
+          {items.map((item) =>
+            item.kind === "interes" ? (
+              <ConversationRow key={item.interes.id} request={item.request} interes={item.interes} onOpen={onOpenConversation} />
+            ) : (
+              <DirectOfferRow key={item.oferta.id} request={item.request} offer={item.oferta} onOpen={onOpenOffer} />
+            )
+          )}
         </div>
       )}
     </div>
