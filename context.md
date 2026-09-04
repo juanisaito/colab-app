@@ -120,6 +120,48 @@ técnicas, del más reciente (justo abajo, con fecha del 4 de septiembre) al
 más viejo. Sirve como historial y como referencia de detalle — no hace
 falta leerlo entero para empezar a trabajar.
 
+## Bloque 3 — Ubicación y horario progresivos (4 de septiembre de 2026)
+
+Rediseño chico y aislado sobre la pantalla "Ubicación y horario" de
+`ContextStep` (fase `ubicacion_franja` en `app/ColabApp.jsx`), sin tocar
+`app/domain/`, el formato de storage, ni ninguna otra fase/pantalla.
+
+- **Se eliminó "Escribir otra zona":** las dos fuentes de ubicación que
+  quedan son "Usar mi ubicación aproximada" y "Elegir barrio o zona". Un
+  pedido guardado antes de este bloque con `ubicacion` de texto libre (ni
+  "Cerca mío" ni un barrio de la lista) sigue abriendo para edición y
+  mostrando ese valor tal cual, de sólo lectura (`locationMode === "legacy"`)
+  — se puede cambiar a aproximada o a un barrio, pero no volver a escribir
+  una zona libre nueva.
+- **Patrón colapsar-al-elegir:** elegir un barrio o confirmar la ubicación
+  aproximada colapsa la sección a una fila compacta ("Villa Crespo" +
+  "Cambiar"), en vez de dejar la lista o el panel de geolocalización
+  abiertos. "Cambiar" reabre las dos fuentes de nivel superior — para
+  "Elegir barrio o zona" eso incluye la lista completa, con el barrio
+  previo ya marcado. Estado nuevo y transitorio (`locationExpanded`, nunca
+  se persiste); `EditorialBigOption` suma una prop `dense` opcional y
+  aditiva (default sin cambios) para la lista de barrios, sin afectar a
+  ningún otro llamador de esa pieza compartida.
+- **"Horario" progresivo:** ya no se muestra hasta que hay una ubicación
+  válida confirmada (aproximada, barrio, o legacy) — aparece con un fade
+  (`q-fade`, la misma clase que ya usa el resto de la app) en vez de estar
+  siempre visible. Las reglas de franjas (máximo dos, "Me adapto"
+  excluyente) no cambiaron — siguen viviendo en `app/domain/timeSlots.js`.
+- **Densidad:** el título de esta fase baja a 21px (`PhaseHeading` suma un
+  prop `size` opcional, default el tamaño compartido de siempre — el resto
+  de las fases no cambia), y las filas principales de ubicación bajan de
+  15.5px a 14.5px. Los targets táctiles se mantuvieron en ≥44px.
+
+Verificado con `pnpm test` (260 pruebas, sin cambios) y `pnpm build`.
+Recorrido con Playwright en 390×844 y 1440×900: Horario oculto hasta
+confirmar ubicación, elegir barrio → colapsa → cambiar → elegir otro barrio
+→ recolapsa, reglas de horario intactas, "Continuar" siempre visible sin
+scroll raro, volver de fase y regresar conserva la selección colapsada,
+geolocalización simulada con éxito y con error (permiso denegado, con
+alternativa manual siempre disponible), y un pedido legacy con `ubicacion`
+de texto libre abriendo para edición sin errores. Sin errores de consola
+nuevos.
+
 ## Bloque 2 — Limpiar el flujo de creación musical (4 de septiembre de 2026)
 
 Rediseño chico y aislado sobre el alta ya existente (texto libre → logística

@@ -339,7 +339,10 @@ export function EditorialLabel({ children }) {
 // Variante editorial de BigOption, agregada vía una pieza compartida propia
 // (no una prop en BigOption) para no tocar su render en la variante oscura
 // que sigue usando el resto de la app. Misma lógica de selección/deshabilitado.
-export function EditorialBigOption({ label, selected, disabled, onClick }) {
+// `dense` es aditivo (default false, mismo tamaño de siempre): sólo la usa
+// hoy la lista de barrios de "Ubicación y horario" (ver ColabApp.jsx), sin
+// tocar el resto de las pantallas que ya consumen esta pieza.
+export function EditorialBigOption({ label, selected, disabled, onClick, dense }) {
   return (
     <button
       onClick={disabled ? undefined : onClick}
@@ -359,7 +362,7 @@ export function EditorialBigOption({ label, selected, disabled, onClick }) {
         opacity: disabled ? 0.4 : 1,
       }}
     >
-      <span style={{ fontFamily: EDITORIAL.fontSans, fontWeight: selected ? 700 : 500, fontSize: 16.5, color: selected ? EDITORIAL.carbon : EDITORIAL.muted }}>
+      <span style={{ fontFamily: EDITORIAL.fontSans, fontWeight: selected ? 700 : 500, fontSize: dense ? 15 : 16.5, color: selected ? EDITORIAL.carbon : EDITORIAL.muted }}>
         {lowerFirstLabel(label)}
       </span>
       {selected && <span style={{ width: 7, height: 7, borderRadius: "50%", background: EDITORIAL.accent, flexShrink: 0 }} />}

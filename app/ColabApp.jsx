@@ -432,16 +432,25 @@ function ContextStep({ classification, initialContext, reviewExisting, resumeAtP
   const [ubicacion, setUbicacion] = useState(initialLocation);
   const [coordinates, setCoordinates] = useState(initialContext?.coordinates || null);
   const zoneOptions = ["Palermo", "Villa Crespo", "Almagro", "Colegiales", "Belgrano", "Caballito", "Chacarita"];
-  const animatedZoneExamples = ["Palermo", "Belgrano", "Villa Crespo", "Almagro", "Colegiales", "Caballito", "Chacarita", "Boedo"];
-  // Modo de ubicación: sólo decide qué panel mostrar. La única fuente de
-  // verdad de CUÁL es la selección efectiva (para el único punto naranja)
-  // sigue siendo `ubicacion` — nunca se persiste este estado en sí mismo.
+  // Modo de ubicación: sólo decide qué panel mostrar y a qué categoría
+  // pertenece la selección — nunca se persiste este estado en sí mismo, la
+  // única fuente de verdad de CUÁL es la selección efectiva sigue siendo
+  // `ubicacion`. "legacy" es de sólo lectura: un pedido guardado antes de
+  // que se sacara "Escribir otra zona" con una `ubicacion` de texto libre
+  // (no "Cerca mío" ni un barrio de `zoneOptions`) entra acá para mostrarse
+  // tal cual, sin ofrecer forma de escribir una zona libre nueva — sólo
+  // cambiar a ubicación aproximada o a uno de los barrios de la lista.
   const [locationMode, setLocationMode] = useState(() => {
     if (initialLocation === "Cerca mío") return "aproximada";
     if (initialLocation && zoneOptions.includes(initialLocation)) return "elegir_zona";
-    if (initialLocation) return "otra_zona";
+    if (initialLocation) return "legacy";
     return null;
   });
+  // Si ya hay una ubicación cargada (pedido nuevo con logística inferida, o
+  // reedición de uno existente), arranca colapsada en la fila de
+  // confirmación — el panel/lista sólo se expande al tocar "Cambiar" o al
+  // elegir una fuente desde cero. Estado transitorio, nunca se persiste.
+  const [locationExpanded, setLocationExpanded] = useState(() => !initialLocation);
   const [timeSlots, setTimeSlots] = useState(() => {
     const fromContext = normalizeTimeSlots(initialContext);
     if (fromContext.length > 0) return fromContext;
@@ -456,7 +465,6 @@ function ContextStep({ classification, initialContext, reviewExisting, resumeAtP
   // fase posterior, ubicación ya fue revisada en la vuelta anterior.)
   const [locationReviewed, setLocationReviewed] = useState(() => resumesAt(resumeAtPhase, "ubicacion_franja", false));
   const [locating, setLocating] = useState(false);
-  const [zoneInputFocused, setZoneInputFocused] = useState(false);
   const [locationError, setLocationError] = useState(null);
   // "denied" | "unavailable" | "timeout" | "unsupported" | "generic" | null
   const [locationErrorKind, setLocationErrorKind] = useState(null);
@@ -605,9 +613,12 @@ function ContextStep({ classification, initialContext, reviewExisting, resumeAtP
 
   if (phase === "done") return null;
 
-  // Las tres opciones de nivel superior son mutuamente excluyentes: elegir
-  // una limpia el valor de `ubicacion` sólo si pertenecía al modo anterior,
-  // para no perder una selección real al simplemente pasar por otro modo.
+  // Las dos fuentes de nivel superior son mutuamente excluyentes: elegir una
+  // limpia el valor de `ubicacion` sólo si pertenecía a otra fuente, para no
+  // perder una selección real al simplemente pasar de una a otra. Las dos
+  // dejan `locationExpanded` como estaba (ya es `true` para poder tocar
+  // estos botones — sólo se ocultan detrás de la fila compacta una vez
+  // confirmada la selección).
   function chooseAproximada() {
     setLocationMode("aproximada");
     setLocationError(null);
@@ -624,14 +635,6 @@ function ContextStep({ classification, initialContext, reviewExisting, resumeAtP
     setLocationErrorKind(null);
     setCoordinates(null);
     if (!zoneOptions.includes(ubicacion)) setUbicacion(null);
-  }
-
-  function chooseOtraZona() {
-    setLocationMode("otra_zona");
-    setLocationError(null);
-    setLocationErrorKind(null);
-    setCoordinates(null);
-    if (ubicacion === "Cerca mío" || zoneOptions.includes(ubicacion)) setUbicacion(null);
   }
 
   // Distingue el resultado real de la geolocalización: permiso denegado o
@@ -653,6 +656,9 @@ function ContextStep({ classification, initialContext, reviewExisting, resumeAtP
         setCoordinates({ lat: position.coords.latitude, lng: position.coords.longitude });
         setUbicacion("Cerca mío");
         setLocating(false);
+        // Éxito: colapsa a la fila de confirmación, igual que elegir un
+        // barrio — ver `selectZone` más abajo.
+        setLocationExpanded(false);
       },
       (err) => {
         setLocating(false);
@@ -679,7 +685,24 @@ function ContextStep({ classification, initialContext, reviewExisting, resumeAtP
     setCoordinates(null);
     setLocationError(null);
     setUbicacion(zone);
+    // Elegir un barrio colapsa la lista a la fila de confirmación — volver a
+    // abrirla es la única forma de cambiarlo (ver la fila "Cambiar" abajo).
+    setLocationExpanded(false);
   }
+
+  // Valor legible de la ubicación ya confirmada, o null si todavía no hay
+  // una selección válida para el modo activo — es la única condición que
+  // decide si se muestra la fila compacta (en vez del panel/lista) y si
+  // "Horario" ya puede aparecer.
+  const confirmedLocationLabel =
+    locationMode === "legacy" && ubicacion
+      ? ubicacion
+      : locationMode === "aproximada" && ubicacion === "Cerca mío"
+        ? "Ubicación aproximada"
+        : locationMode === "elegir_zona" && zoneOptions.includes(ubicacion)
+          ? ubicacion
+          : null;
+  const showCompactLocation = !locationExpanded && !!confirmedLocationLabel;
 
   const qHeading = { fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 24, color: EDITORIAL.carbon, margin: 0, lineHeight: 1.25, letterSpacing: -0.2 };
   // Cuántos de los dos lugares disponibles ya están ocupados: cada mundo
@@ -726,10 +749,13 @@ function ContextStep({ classification, initialContext, reviewExisting, resumeAtP
   const aclaracionPregunta = resolveClarificationQuestion(classification.clarificationQuestion);
   // Encabezado de cada fase: título + a lo sumo un doodle editorial, nunca
   // dentro de una opción individual.
-  function PhaseHeading({ children, doodle }) {
+  // `size` es aditivo (default: el tamaño compartido `qHeading.fontSize`,
+  // 24) — sólo "Ubicación y horario" lo pisa con un valor menor (ver más
+  // abajo), el resto de las fases sigue con el tamaño de siempre.
+  function PhaseHeading({ children, doodle, size }) {
     return (
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 22 }}>
-        <h2 style={qHeading}>{children}</h2>
+        <h2 style={{ ...qHeading, fontSize: size || qHeading.fontSize }}>{children}</h2>
         {doodle}
       </div>
     );
@@ -760,26 +786,25 @@ function ContextStep({ classification, initialContext, reviewExisting, resumeAtP
 
         {phase === "ubicacion_franja" && (
           <>
-            <PhaseHeading doodle={<DoodlePinClock width={44} />}>Ubicación y horario</PhaseHeading>
-            <div style={{ marginBottom: 22 }}>
+            <PhaseHeading doodle={<DoodlePinClock width={40} />} size={21}>Ubicación y horario</PhaseHeading>
+            <div style={{ marginBottom: 18 }}>
               <EditorialLabel>Ubicación</EditorialLabel>
-              <p style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 600, color: EDITORIAL.carbon, fontSize: 15, lineHeight: 1.4, margin: "-2px 0 12px" }}>
-                ¿En qué zona te sirve trabajar?
-              </p>
-              <div>
-                {/* Acción principal: única fila con borde propio (no un
-                    divisor compartido con la lista de abajo), para que se
-                    lea como LA acción de la sección y no como un ítem más
-                    de una lista de barrios. */}
+              {showCompactLocation ? (
+                // Fila de confirmación: reemplaza tanto la acción principal
+                // como las filas secundarias de abajo una vez que hay una
+                // selección válida (aproximada, un barrio, o legacy de sólo
+                // lectura) — "Cambiar" es la única forma de volver a abrir el
+                // panel/lista correspondiente.
                 <button
-                  onClick={chooseAproximada}
+                  onClick={() => setLocationExpanded(true)}
                   className="press"
                   style={{
                     display: "flex",
                     alignItems: "center",
+                    justifyContent: "space-between",
                     gap: 10,
                     width: "100%",
-                    minHeight: 52,
+                    minHeight: 48,
                     padding: "0 14px",
                     textAlign: "left",
                     background: "none",
@@ -788,155 +813,163 @@ function ContextStep({ classification, initialContext, reviewExisting, resumeAtP
                     cursor: "pointer",
                   }}
                 >
-                  <LocationPinIcon />
-                  <span style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 600, fontSize: 15.5, color: EDITORIAL.carbon }}>
-                    Usar mi ubicación aproximada
+                  <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                    <LocationPinIcon size={16} />
+                    <span style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 600, fontSize: 14.5, color: EDITORIAL.carbon, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {confirmedLocationLabel}
+                    </span>
+                  </span>
+                  <span style={{ fontFamily: EDITORIAL.fontSans, fontSize: 12.5, color: EDITORIAL.muted, textDecoration: "underline", textUnderlineOffset: 3, flexShrink: 0 }}>
+                    Cambiar
                   </span>
                 </button>
+              ) : (
+                <>
+                  <p style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 600, color: EDITORIAL.carbon, fontSize: 14.5, lineHeight: 1.4, margin: "-2px 0 10px" }}>
+                    ¿En qué zona te sirve trabajar?
+                  </p>
+                  <div>
+                    {/* Acción principal: única fila con borde propio (no un
+                        divisor compartido con la lista de abajo), para que se
+                        lea como LA acción de la sección y no como un ítem más
+                        de una lista de barrios. */}
+                    <button
+                      onClick={chooseAproximada}
+                      className="press"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        width: "100%",
+                        minHeight: 48,
+                        padding: "0 14px",
+                        textAlign: "left",
+                        background: "none",
+                        border: `1px solid ${EDITORIAL.border}`,
+                        borderRadius: 3,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <LocationPinIcon size={16} />
+                      <span style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 600, fontSize: 14.5, color: EDITORIAL.carbon }}>
+                        Usar mi ubicación aproximada
+                      </span>
+                    </button>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0" }}>
-                  <div style={{ flex: 1, height: 1, background: EDITORIAL.border }} />
-                  <span style={{ fontFamily: EDITORIAL.fontSans, fontSize: 11.5, color: EDITORIAL.muted }}>o</span>
-                  <div style={{ flex: 1, height: 1, background: EDITORIAL.border }} />
-                </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "10px 0" }}>
+                      <div style={{ flex: 1, height: 1, background: EDITORIAL.border }} />
+                      <span style={{ fontFamily: EDITORIAL.fontSans, fontSize: 11.5, color: EDITORIAL.muted }}>o</span>
+                      <div style={{ flex: 1, height: 1, background: EDITORIAL.border }} />
+                    </div>
 
-                {/* Acciones secundarias: mismo peso de texto (carbón) que la
-                    acción principal, pero sin caja — se distinguen de las
-                    filas de selección (barrios) de abajo, que siguen grises
-                    hasta que se eligen. */}
-                <button
-                  onClick={chooseElegirZona}
-                  className="press"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    width: "100%",
-                    textAlign: "left",
-                    background: "none",
-                    border: "none",
-                    borderBottom: `1px solid ${EDITORIAL.border}`,
-                    padding: "13px 2px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <span style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 600, fontSize: 15.5, color: EDITORIAL.carbon }}>Elegir barrio o zona</span>
-                  <ChevronIcon direction={locationMode === "elegir_zona" ? "down" : "right"} />
-                </button>
-                <button
-                  onClick={chooseOtraZona}
-                  className="press"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    width: "100%",
-                    textAlign: "left",
-                    background: "none",
-                    border: "none",
-                    borderBottom: `1px solid ${EDITORIAL.border}`,
-                    padding: "13px 2px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <span style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 600, fontSize: 15.5, color: EDITORIAL.carbon }}>Escribir otra zona</span>
-                  <ChevronIcon direction={locationMode === "otra_zona" ? "down" : "right"} />
-                </button>
-              </div>
+                    {/* Acción secundaria: mismo peso de texto (carbón) que la
+                        acción principal, pero sin caja — se distingue de las
+                        filas de selección (barrios) de abajo, que siguen
+                        grises hasta que se eligen. */}
+                    <button
+                      onClick={chooseElegirZona}
+                      className="press"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        width: "100%",
+                        textAlign: "left",
+                        background: "none",
+                        border: "none",
+                        borderBottom: `1px solid ${EDITORIAL.border}`,
+                        padding: "14px 2px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span style={{ fontFamily: EDITORIAL.fontSans, fontWeight: 600, fontSize: 14.5, color: EDITORIAL.carbon }}>Elegir barrio o zona</span>
+                      <ChevronIcon direction={locationMode === "elegir_zona" ? "down" : "right"} />
+                    </button>
+                  </div>
 
-              {locationMode === "aproximada" && (
-                <div style={{ background: EDITORIAL.surface, border: `1px solid ${EDITORIAL.border}`, padding: 12, marginTop: 10 }}>
-                  {locating && (
-                    <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5, lineHeight: 1.45, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                      Buscando ubicación<EditorialThinkingDots />
-                    </p>
+                  {locationMode === "aproximada" && (
+                    <div style={{ background: EDITORIAL.surface, border: `1px solid ${EDITORIAL.border}`, padding: 12, marginTop: 10 }}>
+                      {locating && (
+                        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12.5, lineHeight: 1.45, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                          Buscando ubicación<EditorialThinkingDots />
+                        </p>
+                      )}
+                      {!locating && ubicacion === "Cerca mío" && (
+                        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.accent, fontWeight: 700, fontSize: 12.5, margin: "0 0 8px" }}>
+                          Ubicación detectada
+                        </p>
+                      )}
+                      {!locating && ubicacion !== "Cerca mío" && locationError && (
+                        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.error, fontSize: 12.5, lineHeight: 1.45, margin: "0 0 8px" }}>
+                          {locationError}
+                        </p>
+                      )}
+                      {!locating && (
+                        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12, lineHeight: 1.45, margin: ubicacion === "Cerca mío" ? 0 : "0 0 10px" }}>
+                          Usamos una zona aproximada para buscar profesionales cerca. No compartimos tu dirección exacta.
+                        </p>
+                      )}
+                      {!locating && ubicacion === "Cerca mío" && (
+                        <div style={{ marginTop: 10 }}>
+                          <EditorialTextLink onClick={chooseElegirZona}>Elegir zona manualmente</EditorialTextLink>
+                        </div>
+                      )}
+                      {!locating && ubicacion !== "Cerca mío" && (locationErrorKind === "denied" || locationErrorKind === "unsupported") && (
+                        <div style={{ marginTop: 10 }}>
+                          <EditorialSecondaryButton full onClick={chooseElegirZona}>Elegir zona manualmente</EditorialSecondaryButton>
+                        </div>
+                      )}
+                      {!locating && ubicacion !== "Cerca mío" && (locationErrorKind === "timeout" || locationErrorKind === "generic") && (
+                        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+                          <EditorialSecondaryButton full onClick={requestCurrentLocation}>Reintentar ubicación</EditorialSecondaryButton>
+                          <EditorialTextLink onClick={chooseElegirZona}>Elegir zona manualmente</EditorialTextLink>
+                        </div>
+                      )}
+                      {!locating && ubicacion !== "Cerca mío" && !locationErrorKind && (
+                        <div style={{ marginTop: 10 }}>
+                          <EditorialSecondaryButton full onClick={requestCurrentLocation}>Activar ubicación</EditorialSecondaryButton>
+                        </div>
+                      )}
+                    </div>
                   )}
-                  {!locating && ubicacion === "Cerca mío" && (
-                    <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.accent, fontWeight: 700, fontSize: 12.5, margin: "0 0 8px" }}>
-                      Ubicación detectada
-                    </p>
-                  )}
-                  {!locating && ubicacion !== "Cerca mío" && locationError && (
-                    <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.error, fontSize: 12.5, lineHeight: 1.45, margin: "0 0 8px" }}>
-                      {locationError}
-                    </p>
-                  )}
-                  {!locating && (
-                    <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12, lineHeight: 1.45, margin: ubicacion === "Cerca mío" ? 0 : "0 0 10px" }}>
-                      Usamos una zona aproximada para buscar profesionales cerca. No compartimos tu dirección exacta.
-                    </p>
-                  )}
-                  {!locating && ubicacion !== "Cerca mío" && (locationErrorKind === "denied" || locationErrorKind === "unsupported") && (
+
+                  {locationMode === "elegir_zona" && (
                     <div style={{ marginTop: 10 }}>
-                      <EditorialSecondaryButton full onClick={chooseElegirZona}>Elegir zona manualmente</EditorialSecondaryButton>
+                      {zoneOptions.map((zone) => (
+                        <EditorialBigOption key={zone} dense label={zone} selected={ubicacion === zone} onClick={() => selectZone(zone)} />
+                      ))}
                     </div>
                   )}
-                  {!locating && ubicacion !== "Cerca mío" && (locationErrorKind === "timeout" || locationErrorKind === "generic") && (
-                    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
-                      <EditorialSecondaryButton full onClick={requestCurrentLocation}>Reintentar ubicación</EditorialSecondaryButton>
-                      <EditorialTextLink onClick={chooseElegirZona}>Elegir zona manualmente</EditorialTextLink>
-                    </div>
-                  )}
-                  {!locating && ubicacion !== "Cerca mío" && !locationErrorKind && (
-                    <div style={{ marginTop: 10 }}>
-                      <EditorialSecondaryButton full onClick={requestCurrentLocation}>Activar ubicación</EditorialSecondaryButton>
-                    </div>
-                  )}
-                </div>
+                </>
               )}
-
-              {locationMode === "elegir_zona" && (
-                <div style={{ marginTop: 10 }}>
-                  {zoneOptions.map((zone) => (
-                    <EditorialBigOption key={zone} label={zone} selected={ubicacion === zone} onClick={() => selectZone(zone)} />
+            </div>
+            {showCompactLocation && (
+              <div className="q-fade">
+                <EditorialLabel>Horario</EditorialLabel>
+                <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12, lineHeight: 1.4, margin: "-4px 0 10px" }}>
+                  Podés elegir hasta dos opciones
+                </p>
+                <div>
+                  {TIME_SLOT_OPTIONS.map((op) => (
+                    <EditorialBigOption
+                      key={op}
+                      label={op}
+                      selected={timeSlots.includes(op)}
+                      disabled={isTimeSlotOptionDisabled(timeSlots, op)}
+                      onClick={() => setTimeSlots((current) => toggleTimeSlot(current, op))}
+                    />
                   ))}
-                </div>
-              )}
-
-              {locationMode === "otra_zona" && (
-                <div style={{ marginTop: 10, position: "relative" }}>
-                  <input
-                    value={ubicacion || ""}
-                    onChange={(e) => { setUbicacion(e.target.value); setCoordinates(null); }}
-                    onFocus={() => setZoneInputFocused(true)}
-                    onBlur={() => setZoneInputFocused(false)}
-                    autoFocus
-                    style={{ ...editorialUnderlineInputStyle, position: "relative", zIndex: 2, fontSize: 14.5 }}
-                  />
-                  {!ubicacion && !zoneInputFocused && (
-                    <div className="q-fade" style={{ position: "absolute", inset: "8px 0 auto", pointerEvents: "none", fontFamily: EDITORIAL.fontSans, fontSize: 14.5 }}>
-                      <AnimatedPrompt examples={animatedZoneExamples} color={EDITORIAL.muted} />
-                    </div>
-                  )}
-                  <div style={{ height: 1.5, background: EDITORIAL.carbon }} />
-                </div>
-              )}
-            </div>
-            <div>
-              <EditorialLabel>Horario</EditorialLabel>
-              <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 12, lineHeight: 1.4, margin: "-4px 0 10px" }}>
-                Podés elegir hasta dos opciones
-              </p>
-              <div>
-                {TIME_SLOT_OPTIONS.map((op) => (
                   <EditorialBigOption
-                    key={op}
-                    label={op}
-                    selected={timeSlots.includes(op)}
-                    disabled={isTimeSlotOptionDisabled(timeSlots, op)}
-                    onClick={() => setTimeSlots((current) => toggleTimeSlot(current, op))}
+                    label={FLEXIBLE_TIME_SLOT}
+                    selected={timeSlots.includes(FLEXIBLE_TIME_SLOT)}
+                    onClick={() => setTimeSlots((current) => toggleTimeSlot(current, FLEXIBLE_TIME_SLOT))}
                   />
-                ))}
-                <EditorialBigOption
-                  label={FLEXIBLE_TIME_SLOT}
-                  selected={timeSlots.includes(FLEXIBLE_TIME_SLOT)}
-                  onClick={() => setTimeSlots((current) => toggleTimeSlot(current, FLEXIBLE_TIME_SLOT))}
-                />
-              </div>
-            </div>
-            {ubicacion && timeSlots.length > 0 && !locationReviewed && (
-              <div style={{ marginTop: 22 }}>
-                <EditorialPrimaryButton full onClick={() => setLocationReviewed(true)}>Continuar</EditorialPrimaryButton>
+                </div>
+                {timeSlots.length > 0 && !locationReviewed && (
+                  <div style={{ marginTop: 18 }}>
+                    <EditorialPrimaryButton full onClick={() => setLocationReviewed(true)}>Continuar</EditorialPrimaryButton>
+                  </div>
+                )}
               </div>
             )}
           </>
