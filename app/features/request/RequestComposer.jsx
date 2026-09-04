@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { EDITORIAL } from "../../theme.js";
-import { EditorialPrimaryButton, EditorialCircleArrowButton, editorialUnderlineInputStyle, EditorialThinkingDots } from "../../ui/pieces.jsx";
+import { EditorialPrimaryButton, EditorialHandDrawnSubmitButton, editorialUnderlineInputStyle, EditorialThinkingDots } from "../../ui/pieces.jsx";
 import AnimatedPrompt from "../../ui/AnimatedPrompt.jsx";
 
 const REQUEST_EXAMPLES = [
@@ -79,7 +79,7 @@ export default function RequestComposer({
                 </div>
               )}
             </div>
-            <EditorialCircleArrowButton disabled={!canSubmit} onClick={() => onSubmit(text.trim())} />
+            <EditorialHandDrawnSubmitButton disabled={!canSubmit} onClick={() => onSubmit(text.trim())} />
           </div>
           <div style={{ height: 1.5, background: focused ? EDITORIAL.carbon : EDITORIAL.border, transition: "background .15s ease" }} />
         </div>

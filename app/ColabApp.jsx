@@ -7,7 +7,7 @@ import { HomeScreen, OrdersScreen, MessagesScreen, ProfileScreen, HelpScreen, Pr
 import {
   PrimaryButton, TextLink, UnderlineField, Screen, ProducerPhoto,
   EditorialPrimaryButton, EditorialSecondaryButton, EditorialTextLink, EditorialUnderlineField, editorialUnderlineInputStyle, HandDrawnUnderline,
-  EditorialLabel, EditorialBigOption, EditorialBackButton, EditorialCircleArrowButton, EditorialThinkingDots,
+  EditorialLabel, EditorialBigOption, EditorialBackButton, EditorialCircleArrowButton, EditorialHandDrawnSubmitButton, EditorialThinkingDots,
   LocationPinIcon, ChevronIcon,
   DoodlePathsDiverging, DoodlePinClock, DoodleWaveform, DoodleSoundStars, DoodleCheck, DoodleSpeechBubble,
 } from "./ui/pieces.jsx";
@@ -23,7 +23,9 @@ import {
   puedeCancelarse, requestNeedsArtistInput,
   puedeEscribirEnConversacion, tieneLimiteDeMensajes,
 } from "./domain/estado.js";
-import { GENRE_LABELS, detectGeneros } from "./domain/genres.js";
+import { detectGeneros } from "./domain/genres.js";
+import { MUSIC_WORLDS } from "./domain/musicReferenceCatalog.js";
+import { normalizeSelectedMusicWorlds } from "./domain/musicReferenceSuggestions.js";
 import { interpretRequest } from "./domain/interpretation.js";
 import { calculateArtistFinalPrice } from "./domain/pricing.js";
 import { pickProducers, getCuratedAlternatives, pickProducerPath, buildOfferFrom, findProducerByName } from "./domain/matching.js";
@@ -315,7 +317,7 @@ function StartScreen({ onSubmit, interpreting, error, initialText, onExit, exitL
               </div>
             )}
           </div>
-          <EditorialCircleArrowButton disabled={text.trim().length < 3 || interpreting} onClick={() => onSubmit(text.trim())} />
+          <EditorialHandDrawnSubmitButton disabled={text.trim().length < 3 || interpreting} onClick={() => onSubmit(text.trim())} />
         </div>
         <div style={{ height: 1.5, background: focused ? EDITORIAL.carbon : EDITORIAL.border, transition: "background .15s ease" }} />
       </div>
@@ -347,6 +349,26 @@ function resolveClarificationQuestion(raw) {
   const trimmed = raw.trim();
   if (!trimmed || trimmed.length > MAX_CLARIFICATION_QUESTION_LENGTH) return DEFAULT_CLARIFICATION_QUESTION;
   return trimmed;
+}
+
+// Adaptador local y explícito de los códigos legacy de detectGeneros() a
+// los mundos musicales del catálogo aprobado — sólo para preseleccionar la
+// pantalla nueva (inferencia en pedidos nuevos, derivación al editar un
+// pedido legacy sin musicWorlds). No migra ni reemplaza context.generos:
+// esa colección sigue existiendo tal cual para el matching actual.
+const LEGACY_GENRE_TO_MUSIC_WORLD = {
+  urbano: "rap_hiphop",
+  trap: "trap",
+  reggaeton: "reggaeton",
+  pop: "pop",
+  rock: "rock",
+  alternativo: "indie_alternative",
+  electronica: "electronic",
+};
+
+function adaptGenreCodesToMusicWorlds(genreCodes) {
+  const mapped = (genreCodes || []).map((code) => LEGACY_GENRE_TO_MUSIC_WORLD[code]).filter(Boolean);
+  return normalizeSelectedMusicWorlds(mapped);
 }
 
 function ContextStep({ classification, initialContext, reviewExisting, onComplete, onBack }) {
@@ -394,24 +416,36 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   const [adjuntando, setAdjuntando] = useState(null);
   const [referenciaConfirmada, setReferenciaConfirmada] = useState(!!initialContext?.referenciaOfrecida && !reviewExisting);
   const [showProtection, setShowProtection] = useState(false);
-  const [generos, setGeneros] = useState(initialContext?.generos || []);
-  const [generosConfirmados, setGenerosConfirmados] = useState(!!initialContext?.generosConfirmados && !reviewExisting);
-  const [generosInferidos, setGenerosInferidos] = useState([]);
+  // context.generos (legacy) ya no tiene una pantalla propia acá: se
+  // conserva tal cual para el matching actual (buildMatchResult, igual que
+  // antes), pero la fuente de verdad de la interfaz nueva es musicWorlds.
+  const generos = initialContext?.generos || [];
+  const initialMusicWorlds = initialContext?.musicWorlds
+    ? normalizeSelectedMusicWorlds(initialContext.musicWorlds)
+    : reviewExisting
+      ? adaptGenreCodesToMusicWorlds(initialContext?.generos)
+      : [];
+  const [musicWorlds, setMusicWorlds] = useState(initialMusicWorlds);
+  const [musicWorldsConfirmed, setMusicWorldsConfirmed] = useState(!!initialContext?.musicWorldsConfirmed && !reviewExisting);
+  const [musicWorldsUndecided, setMusicWorldsUndecided] = useState(!!initialContext?.musicWorldsUndecided);
+  const [musicWorldsWereInferred, setMusicWorldsWereInferred] = useState(false);
+  const [otherFieldOpen, setOtherFieldOpen] = useState(!!initialContext?.otherMusicWorld);
+  const [otherMusicWorldText, setOtherMusicWorldText] = useState(initialContext?.otherMusicWorld ?? "");
   const fileInputRef = useRef(null);
-  const genreInferenceApplied = useRef(false);
+  const musicWorldsInferenceApplied = useRef(false);
 
   const needsModalidad = tipo === "hacer" && (!modalidadElegida || !modalidadReviewed);
   const needsUbicacionFranja = (tipo === "grabar" || (tipo === "hacer" && modalidadElegida === "presencial")) && (!ubicacion || timeSlots.length === 0 || !locationReviewed);
   const needsDatoFaltante = tipo === "especial" && (datos_faltantes || []).includes("fecha_hora") && !datoFaltanteConfirmado;
+  const needsMusicWorlds = !musicWorldsConfirmed;
   const needsReferencia = !referenciaTexto && !referenciaConfirmada;
-  const needsGeneros = !generosConfirmados;
 
   let phase = "done";
   if (needsModalidad) phase = "modalidad";
   else if (needsUbicacionFranja) phase = "ubicacion_franja";
   else if (needsDatoFaltante) phase = "dato_faltante";
+  else if (needsMusicWorlds) phase = "musica";
   else if (needsReferencia) phase = "referencia";
-  else if (needsGeneros) phase = "generos";
 
   useEffect(() => {
     if (phase === "done") {
@@ -428,21 +462,24 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
         audioAdjunto,
         referenciaOfrecida: true,
         generos,
-        generosConfirmados: true,
+        musicWorlds,
+        musicWorldsConfirmed: true,
+        musicWorldsUndecided,
+        otherMusicWorld: otherFieldOpen && otherMusicWorldText.trim() ? otherMusicWorldText.trim() : null,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
   useEffect(() => {
-    if (phase !== "generos" || genreInferenceApplied.current) return;
-    genreInferenceApplied.current = true;
-    if (generos.length > 0) return;
+    if (phase !== "musica" || musicWorldsInferenceApplied.current) return;
+    musicWorldsInferenceApplied.current = true;
+    if (musicWorlds.length > 0 || musicWorldsUndecided) return;
     const inferenceText = [classification.originalText, classification.summary, referenciaTexto, referenciaLink, archivoNombre].filter(Boolean).join(" ");
-    const inferred = detectGeneros(inferenceText).filter((genre) => GENRE_LABELS[genre]);
+    const inferred = adaptGenreCodesToMusicWorlds(detectGeneros(inferenceText));
     if (inferred.length > 0) {
-      setGeneros(inferred);
-      setGenerosInferidos(inferred);
+      setMusicWorlds(inferred);
+      setMusicWorldsWereInferred(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
@@ -551,13 +588,43 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
 
   const qHeading = { fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 24, color: EDITORIAL.carbon, margin: 0, lineHeight: 1.25, letterSpacing: -0.2 };
   const hayAlgunaReferencia = referenciaLink.trim() || archivoAdjunto || audioAdjunto;
-  const genreOptions = [
-    ["Urbano", "urbano"], ["Trap", "trap"], ["Reggaetón", "reggaeton"], ["Pop", "pop"],
-    ["Rock", "rock"], ["Indie / alternativo", "alternativo"], ["Electrónica", "electronica"], ["Todavía no sé", "no_se"],
-  ];
-  function toggleGenero(value) {
-    if (value === "no_se") return setGeneros(generos.includes("no_se") ? [] : ["no_se"]);
-    setGeneros((current) => current.includes(value) ? current.filter((g) => g !== value) : [...current.filter((g) => g !== "no_se"), value]);
+  // Cuántos de los dos lugares disponibles ya están ocupados: cada mundo
+  // elegido cuenta uno, y "Otro" activado (con o sin texto todavía) cuenta
+  // el suyo — así no hace falta esperar a que tenga texto para bloquear el
+  // resto de las alternativas.
+  const musicSelectionCount = musicWorlds.length + (otherFieldOpen ? 1 : 0);
+  const hasConcreteMusicSelection = musicWorlds.length > 0 || (otherFieldOpen && otherMusicWorldText.trim().length > 0);
+  const canContinueMusica = musicWorldsUndecided || hasConcreteMusicSelection;
+
+  function toggleMusicWorld(code) {
+    if (musicWorldsUndecided) setMusicWorldsUndecided(false);
+    setMusicWorlds((current) => {
+      if (current.includes(code)) return current.filter((c) => c !== code);
+      if (current.length + (otherFieldOpen ? 1 : 0) >= 2) return current;
+      return normalizeSelectedMusicWorlds([...current, code]);
+    });
+  }
+
+  function toggleMusicWorldsUndecided() {
+    if (musicWorldsUndecided) {
+      setMusicWorldsUndecided(false);
+      return;
+    }
+    setMusicWorldsUndecided(true);
+    setMusicWorlds([]);
+    setOtherFieldOpen(false);
+    setOtherMusicWorldText("");
+  }
+
+  function toggleOtherMusicWorldField() {
+    if (otherFieldOpen) {
+      setOtherFieldOpen(false);
+      setOtherMusicWorldText("");
+      return;
+    }
+    if (musicWorlds.length >= 2) return;
+    if (musicWorldsUndecided) setMusicWorldsUndecided(false);
+    setOtherFieldOpen(true);
   }
   // Placeholder de hoy: el fallback local todavía no manda una pregunta
   // puntual (classification.clarificationQuestion queda undefined), así que
@@ -806,6 +873,86 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
           </>
         )}
 
+        {phase === "musica" && (
+          <>
+            <PhaseHeading doodle={<DoodleSoundStars width={42} />}>¿Por dónde va tu música?</PhaseHeading>
+            <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13.5, lineHeight: 1.5, margin: "-10px 0 18px" }}>
+              {musicWorldsWereInferred
+                ? "Marcamos lo que entendimos de tu pedido. Podés cambiarlo."
+                : "Elegí hasta dos. Nos ayuda a encontrar productores que hablan el mismo idioma musical."}
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 20 }}>
+              {MUSIC_WORLDS.map((world) => (
+                <EditorialBigOption
+                  key={world.code}
+                  label={world.label}
+                  selected={musicWorlds.includes(world.code)}
+                  disabled={musicSelectionCount >= 2 && !musicWorlds.includes(world.code)}
+                  onClick={() => toggleMusicWorld(world.code)}
+                />
+              ))}
+            </div>
+            {musicSelectionCount >= 2 && (
+              <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 11.5, lineHeight: 1.4, margin: "10px 0 0" }}>
+                Podés elegir hasta dos.
+              </p>
+            )}
+            <div style={{ display: "flex", gap: 22, marginTop: 18 }}>
+              <button
+                onClick={toggleMusicWorldsUndecided}
+                className="press"
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  fontFamily: EDITORIAL.fontSans,
+                  fontSize: 13.5,
+                  fontWeight: musicWorldsUndecided ? 700 : 400,
+                  color: musicWorldsUndecided ? EDITORIAL.accent : EDITORIAL.muted,
+                  textDecoration: "underline",
+                  textUnderlineOffset: 3,
+                }}
+              >
+                Todavía no sé
+              </button>
+              <button
+                onClick={toggleOtherMusicWorldField}
+                disabled={!otherFieldOpen && musicWorlds.length >= 2}
+                className="press"
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: !otherFieldOpen && musicWorlds.length >= 2 ? "default" : "pointer",
+                  fontFamily: EDITORIAL.fontSans,
+                  fontSize: 13.5,
+                  fontWeight: otherFieldOpen ? 700 : 400,
+                  color: !otherFieldOpen && musicWorlds.length >= 2 ? EDITORIAL.border : otherFieldOpen ? EDITORIAL.accent : EDITORIAL.muted,
+                  textDecoration: "underline",
+                  textUnderlineOffset: 3,
+                }}
+              >
+                Otro
+              </button>
+            </div>
+            {otherFieldOpen && (
+              <div style={{ marginTop: 14 }}>
+                <EditorialUnderlineField
+                  value={otherMusicWorldText}
+                  onChange={(e) => setOtherMusicWorldText(e.target.value)}
+                  placeholder="Escribí el género"
+                  autoFocus
+                  small
+                />
+              </div>
+            )}
+            <div style={{ marginTop: 26 }}>
+              <EditorialPrimaryButton full disabled={!canContinueMusica} onClick={() => setMusicWorldsConfirmed(true)}>Continuar</EditorialPrimaryButton>
+            </div>
+          </>
+        )}
+
         {phase === "referencia" && (
           <>
             <PhaseHeading doodle={<DoodleWaveform width={48} />}>Maqueta o referencia</PhaseHeading>
@@ -843,25 +990,6 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
             </div>
           </>
         )}
-
-        {phase === "generos" && (
-          <>
-            <PhaseHeading doodle={<DoodleSoundStars width={42} />}>
-              {generosInferidos.length > 0 ? "¿Va por acá?" : "¿Por dónde va tu música?"}
-            </PhaseHeading>
-            <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13.5, lineHeight: 1.5, margin: "-10px 0 18px" }}>
-              {generosInferidos.length > 0
-                ? `Detectamos ${generosInferidos.map((genre) => GENRE_LABELS[genre]).join(" y ")}. Confirmalo o cambialo antes de seguir.`
-                : "Elegí todos los que quieras. Nos ayuda a acercarte productores, no te encasilla."}
-            </p>
-            <div>
-              {genreOptions.map(([label, value]) => <EditorialBigOption key={value} label={label} selected={generos.includes(value)} onClick={() => toggleGenero(value)} />)}
-            </div>
-            <div style={{ marginTop: 26 }}>
-              <EditorialPrimaryButton full disabled={generos.length === 0} onClick={() => setGenerosConfirmados(true)}>Continuar</EditorialPrimaryButton>
-            </div>
-          </>
-        )}
       </div>
     </Screen>
   );
@@ -883,8 +1011,21 @@ function SummaryScreen({ classification, context, onEdit, onPublish, publishing,
   if (context.archivoAdjunto) refBits.push(context.archivoNombre || "archivo adjunto");
   if (context.audioAdjunto) refBits.push("audio adjunto");
   const refTexto = referenciaClasif || (refBits.length ? refBits.join(" · ") : null);
-  const genreLabels = { urbano: "Urbano", trap: "Trap", reggaeton: "Reggaetón", pop: "Pop", rock: "Rock", alternativo: "Indie / alternativo", electronica: "Electrónica", no_se: "Sin definir" };
-  const generosTexto = (context.generos || []).map((g) => genreLabels[g] || g).join(" · ");
+  // Fallback legible sólo para pedidos legacy sin musicWorlds: la fuente de
+  // verdad de la interfaz nueva son los labels de MUSIC_WORLDS, no este mapa.
+  const legacyGenreLabels = { urbano: "Urbano", trap: "Trap", reggaeton: "Reggaetón", pop: "Pop", rock: "Rock", alternativo: "Indie / alternativo", electronica: "Electrónica", no_se: "Sin definir" };
+  const musicWorldLabelByCode = Object.fromEntries(MUSIC_WORLDS.map((world) => [world.code, world.label]));
+  let musicaTexto = null;
+  if (context.musicWorldsUndecided) {
+    musicaTexto = "Música: Todavía no lo tengo definido";
+  } else if ((context.musicWorlds || []).length > 0 || context.otherMusicWorld) {
+    const labels = (context.musicWorlds || []).map((code) => musicWorldLabelByCode[code]).filter(Boolean);
+    if (context.otherMusicWorld) labels.push(context.otherMusicWorld);
+    if (labels.length > 0) musicaTexto = `Música: ${labels.join(" · ")}`;
+  } else if ((context.generos || []).length > 0) {
+    const labels = context.generos.map((g) => legacyGenreLabels[g] || g);
+    musicaTexto = `Música: ${labels.join(" · ")}`;
+  }
 
   return (
     <Screen className="q-fade" topSlot={<EditorialBackButton onClick={onEdit} />}>
@@ -894,7 +1035,7 @@ function SummaryScreen({ classification, context, onEdit, onPublish, publishing,
       </div>
       <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 16.5, lineHeight: 1.5, margin: "0 0 12px" }}>{summary}</p>
       {refTexto && <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: "0 0 6px" }}>Referencia: {refTexto}</p>}
-      {generosTexto && <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: "0 0 6px" }}>Géneros: {generosTexto}</p>}
+      {musicaTexto && <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: "0 0 6px" }}>{musicaTexto}</p>}
       {detalles.length > 0 && (
         <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: 0 }}>{detalles.join(" · ")}</p>
       )}

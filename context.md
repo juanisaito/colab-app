@@ -37,7 +37,12 @@ no cambian con este rediseño visual.
   animados junto con su contenedor (evitar transiciones anidadas).
 - Los íconos funcionales (flechas, pin de ubicación) son geométricos
   simples, no doodles — ver `EditorialBackButton`, `EditorialCircleArrowButton`,
-  `LocationPinIcon`, `ChevronIcon` en `app/ui/pieces.jsx`.
+  `LocationPinIcon`, `ChevronIcon` en `app/ui/pieces.jsx`. La única excepción
+  deliberada es la flecha de envío del compositor de "¿Qué querés hacer?"
+  (`EditorialHandDrawnSubmitButton`, mismo archivo): trazo a mano en vez de
+  geométrico, usada sólo en `StartScreen` y `RequestComposer` (Gate e
+  Inicio). El resto de las flechas de volver/seguir/chevrons sigue siendo
+  geométrico — ver "Qué ya está rediseñado" más abajo.
 - Todavía convive una paleta vieja (`COLORS`, oscura, acento azul) en las
   pantallas que faltan rediseñar (ver abajo). Las dos paletas nunca se
   mezclan dentro de una misma pantalla.
@@ -107,9 +112,53 @@ segundo modo a pantallas ya rediseñadas, no reskinear pantallas nuevas).
   matching, moderación) — todavía sin empezar en este prototipo.
 
 El resto de este archivo es el log cronológico de decisiones de producto y
-técnicas, del más reciente (justo abajo, con fecha del 30 de agosto) al más
-viejo. Sirve como historial y como referencia de detalle — no hace falta
-leerlo entero para empezar a trabajar.
+técnicas, del más reciente (justo abajo, con fecha del 3 de septiembre) al
+más viejo. Sirve como historial y como referencia de detalle — no hace
+falta leerlo entero para empezar a trabajar.
+
+## Pantalla de mundos musicales y flecha dibujada a mano (3 de septiembre de 2026)
+
+Con la biblioteca musical V1 y el selector determinístico ya aprobados en
+`app/domain/` (`musicReferenceCatalog.js`, `musicReferenceSuggestions.js`
+— ver commits correspondientes), este bloque reemplazó la vieja pantalla
+de géneros de `ContextStep` (checkboxes de urbano/trap/reggaetón/pop/
+rock/alternativo/electrónica) por la pantalla de **mundos musicales**
+("¿Por dónde va tu música?"), usando directamente `MUSIC_WORLDS` del
+catálogo aprobado — sin duplicar códigos ni labels a mano. El recorrido de
+alta queda: texto libre → logística que falte (modalidad/ubicación-
+horario/dato faltante) → **mundos musicales** → referencia opcional →
+resumen (antes, géneros iba después de la referencia, no antes). El
+selector de seis artistas (`suggestMusicReferences`) todavía **no** se
+llama desde acá — sigue siendo un bloque de dominio aislado, sin pantalla
+propia ni integración con el matching.
+
+Datos nuevos dentro de `context` (mismo objeto que ya se persistía por
+pedido, sin migración de storage): `musicWorlds` (hasta dos códigos de
+`MUSIC_WORLDS`, normalizados con `normalizeSelectedMusicWorlds`),
+`musicWorldsConfirmed`, `musicWorldsUndecided` (booleano — "Todavía no sé"
+no se guarda como un noveno código falso) y `otherMusicWorld` (texto libre
+excepcional de "Otro", que sí cuenta como una de las dos elecciones).
+`context.generos` (legacy) se conserva intacto y sigue siendo lo único que
+usa `buildMatchResult`/`pickProducers` — la nueva selección todavía no
+alimenta el matching, eso queda para un bloque posterior a propósito, para
+no mezclar UI con matching. Para inferir/derivar mundos a partir de
+`detectGeneros()` (pedidos nuevos) o de `context.generos` ya guardado
+(pedidos legacy al editarlos) se usa un adaptador local y explícito en
+`ColabApp.jsx` (`LEGACY_GENRE_TO_MUSIC_WORLD`), no una reutilización de
+los códigos viejos como fuente de verdad.
+
+El resumen (`SummaryScreen`) reemplazó la línea `Géneros: …` por
+`Música: …` usando los labels de `MUSIC_WORLDS`; un pedido legacy sin
+`musicWorlds` conserva un fallback legible con el mapa de géneros
+anterior, para no hacer desaparecer información ya guardada.
+
+También se agregó `EditorialHandDrawnSubmitButton` (`app/ui/pieces.jsx`) —
+la única excepción deliberada al lenguaje geométrico de los íconos
+funcionales: una flecha de trazo irregular, sin círculo ni fondo sólido,
+usada exclusivamente en el envío de "¿Qué querés hacer?" (`StartScreen` y
+`RequestComposer`, que cubre tanto Gate como Inicio). No reemplaza
+`EditorialCircleArrowButton`, que sigue intacta y en uso en el paso del
+nombre de Gate.
 
 ## Inicio, sugerencias e integración de IA (30 de agosto de 2026)
 

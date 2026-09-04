@@ -462,6 +462,44 @@ export function EditorialCircleArrowButton({ onClick, disabled, ariaLabel = "Seg
   );
 }
 
+// Flecha de envío dibujada a mano — la excepción deliberada al lenguaje
+// geométrico del resto de los controles funcionales (ver EditorialBackButton,
+// EditorialCircleArrowButton, ChevronIcon): sin círculo, pastilla ni fondo
+// sólido, trazo levemente irregular como si estuviera hecha con marcador.
+// Sólo para el envío de "¿Qué querés hacer?" (StartScreen y
+// RequestComposer) — no reemplaza ningún otro botón existente.
+export function EditorialHandDrawnSubmitButton({ onClick, disabled, ariaLabel = "Enviar", disabledColor = EDITORIAL.border, activeColor = EDITORIAL.accent }) {
+  const strokeColor = disabled ? disabledColor : activeColor;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      className="press"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 48,
+        height: 44,
+        flexShrink: 0,
+        background: "transparent",
+        border: "none",
+        borderRadius: 0,
+        padding: 0,
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      <svg width="38" height="26" viewBox="0 0 52 34" fill="none" aria-hidden="true">
+        <path d="M3 19 C 14 22, 27 20, 40 15" stroke={strokeColor} strokeWidth={2.1} fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke .15s ease" }} />
+        <path d="M40 15 L28.5 10.5" stroke={strokeColor} strokeWidth={2.1} fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke .15s ease" }} />
+        <path d="M40 15 L32 23.5" stroke={strokeColor} strokeWidth={2.1} fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke .15s ease" }} />
+      </svg>
+    </button>
+  );
+}
+
 // Tres puntos que pulsan suavemente mientras COLAB interpreta un pedido — no
 // un spinner genérico. La animación sólo corre mientras el estado "busy" que
 // la muestra está activo; con prefers-reduced-motion queda estática (ver
