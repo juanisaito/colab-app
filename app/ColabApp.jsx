@@ -7,9 +7,9 @@ import { HomeScreen, OrdersScreen, MessagesScreen, ProfileScreen, HelpScreen, Pr
 import {
   PrimaryButton, TextLink, UnderlineField, Screen, ProducerPhoto,
   EditorialPrimaryButton, EditorialSecondaryButton, EditorialTextLink, EditorialUnderlineField, editorialUnderlineInputStyle, HandDrawnUnderline,
-  EditorialLabel, EditorialBigOption, EditorialBackButton, EditorialCircleArrowButton, EditorialHandDrawnSubmitButton, EditorialThinkingDots,
+  EditorialLabel, EditorialBigOption, EditorialBackButton, EditorialHandDrawnSubmitButton, EditorialThinkingDots,
   LocationPinIcon, ChevronIcon,
-  DoodlePathsDiverging, DoodlePinClock, DoodleWaveform, DoodleSoundStars, DoodleCheck, DoodleSpeechBubble,
+  DoodlePathsDiverging, DoodlePinClock, DoodleSoundStars, DoodleCheck, DoodleSpeechBubble,
 } from "./ui/pieces.jsx";
 import { uid } from "./lib/id.js";
 import { formatMoney } from "./lib/format.js";
@@ -58,34 +58,6 @@ const MAX_PRE_OFFER_MESSAGES_PER_PERSON = 4;
 
 /* ---------------- piezas visuales propias de este flujo ---------------- */
 
-function AttachRow({ label, attached, busy, onToggle }) {
-  return (
-    <button
-      onClick={onToggle}
-      disabled={busy}
-      className="press"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        width: "100%",
-        background: "none",
-        border: "none",
-        borderBottom: `1px solid ${EDITORIAL.border}`,
-        padding: "14px 2px",
-        cursor: busy ? "default" : "pointer",
-      }}
-    >
-      <span style={{ fontFamily: EDITORIAL.fontSans, fontSize: 15, color: attached ? EDITORIAL.carbon : EDITORIAL.muted, fontWeight: attached ? 700 : 500 }}>
-        {label}
-      </span>
-      <span style={{ fontFamily: EDITORIAL.fontMono, fontSize: 11, color: attached ? EDITORIAL.accent : EDITORIAL.muted }}>
-        {busy ? "…" : attached ? "✓ adjuntado" : "Adjuntar"}
-      </span>
-    </button>
-  );
-}
-
 // Punto 10: textura sutil y ESTÁTICA (sin animación, sin violeta, sin blur
 // fuerte) — no un fondo decorativo, solo una insinuación de vida musical.
 function Textura() {
@@ -115,7 +87,6 @@ function Gate({ onDone }) {
   const [requestText, setRequestText] = useState("");
   const [name, setName] = useState("");
   const [nameFocused, setNameFocused] = useState(false);
-  const artistExamples = ["Duki", "Saito", "CND", "Prize", "J4mes", "Tysan", "Dillom", "K4"];
 
   function beginAuth(nextProvider) {
     setProvider(nextProvider);
@@ -227,16 +198,12 @@ function Gate({ onDone }) {
                   if (!(name.trim().length < 2 || saving)) finishGate();
                 }
               }}
+              placeholder="Tu nombre o cómo te dicen"
               autoFocus
               style={{ ...editorialUnderlineInputStyle, position: "relative", zIndex: 2 }}
             />
-            {!name && (
-              <div style={{ position: "absolute", inset: "8px 0 auto", pointerEvents: "none", fontFamily: EDITORIAL.fontSans, fontSize: 17 }}>
-                <AnimatedPrompt examples={artistExamples} color={EDITORIAL.muted} />
-              </div>
-            )}
           </div>
-          <EditorialCircleArrowButton disabled={name.trim().length < 2 || saving} onClick={finishGate} />
+          <EditorialHandDrawnSubmitButton ariaLabel="Seguir" disabled={name.trim().length < 2 || saving} onClick={finishGate} />
         </div>
         <div style={{ height: 1.5, background: nameFocused ? EDITORIAL.carbon : EDITORIAL.border, transition: "background .15s ease" }} />
       </div>
@@ -440,11 +407,27 @@ function sanitizeStoredMusicReferenceIds(ids) {
   return result;
 }
 
-function ContextStep({ classification, initialContext, reviewExisting, onComplete, onBack }) {
+// Cada fase de ContextStep guarda su propio progreso en un booleano
+// "confirmado/revisado" (modalidadReviewed, locationReviewed, etc.) — eso ya
+// funciona como una pila implícita: confirmar una fase avanza a la
+// siguiente todavía sin confirmar, y "des-confirmar" la fase inmediatamente
+// anterior (ver goToPreviousPhase más abajo) vuelve un paso atrás sin tocar
+// ningún dato ya cargado. `resumeAtPhase` es el único caso que necesita un
+// punto de entrada explícito en vez de "la primera sin confirmar": al volver
+// desde el resumen (ver goBackToLastContextPhase en App), ContextStep se
+// remonta de cero y perdería en qué fase estaba, así que el padre le pasa
+// cuál reabrir y esta función decide, fase por fase, si arranca ya
+// confirmada (se salta) o no (es la que se muestra).
+function resumesAt(resumeAtPhase, phaseKey, fallbackWhenNoResume) {
+  if (!resumeAtPhase) return fallbackWhenNoResume;
+  return phaseKey !== resumeAtPhase;
+}
+
+function ContextStep({ classification, initialContext, reviewExisting, resumeAtPhase = null, onComplete, onBack }) {
   const { tipo, modalidad, modalidad_fuente, datos_faltantes, locationText, timeSlot, referencia: referenciaTexto } = classification;
 
   const [modalidadElegida, setModalidadElegida] = useState(initialContext?.modalidad ?? (modalidad_fuente !== "desconocida" ? modalidad : null));
-  const [modalidadReviewed, setModalidadReviewed] = useState(!reviewExisting);
+  const [modalidadReviewed, setModalidadReviewed] = useState(() => resumesAt(resumeAtPhase, "modalidad", !reviewExisting));
   const initialLocation = initialContext?.ubicacion ?? locationText ?? null;
   const [ubicacion, setUbicacion] = useState(initialLocation);
   const [coordinates, setCoordinates] = useState(initialContext?.coordinates || null);
@@ -469,22 +452,27 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   // Siempre requiere el botón "Continuar" explícito antes de avanzar — no
   // sólo al reeditar un pedido existente, también en uno nuevo — porque
   // ahora elegir la primera franja ya no debe avanzar la pantalla sola.
-  const [locationReviewed, setLocationReviewed] = useState(false);
+  // (resumesAt igual puede saltearla: si se vuelve desde el resumen a una
+  // fase posterior, ubicación ya fue revisada en la vuelta anterior.)
+  const [locationReviewed, setLocationReviewed] = useState(() => resumesAt(resumeAtPhase, "ubicacion_franja", false));
   const [locating, setLocating] = useState(false);
   const [zoneInputFocused, setZoneInputFocused] = useState(false);
   const [locationError, setLocationError] = useState(null);
   // "denied" | "unavailable" | "timeout" | "unsupported" | "generic" | null
   const [locationErrorKind, setLocationErrorKind] = useState(null);
   const [datoFaltanteTexto, setDatoFaltanteTexto] = useState(initialContext?.datoFaltanteTexto ?? "");
-  const [datoFaltanteConfirmado, setDatoFaltanteConfirmado] = useState(!!initialContext?.datoFaltanteConfirmado && !reviewExisting);
+  const [datoFaltanteConfirmado, setDatoFaltanteConfirmado] = useState(() => resumesAt(resumeAtPhase, "dato_faltante", !!initialContext?.datoFaltanteConfirmado && !reviewExisting));
 
-  const [referenciaLink, setReferenciaLink] = useState(initialContext?.referenciaLink ?? "");
-  const [archivoAdjunto, setArchivoAdjunto] = useState(!!initialContext?.archivoAdjunto);
-  const [archivoNombre, setArchivoNombre] = useState(initialContext?.archivoNombre ?? null);
-  const [audioAdjunto, setAudioAdjunto] = useState(!!initialContext?.audioAdjunto);
-  const [adjuntando, setAdjuntando] = useState(null);
-  const [referenciaConfirmada, setReferenciaConfirmada] = useState(!!initialContext?.referenciaOfrecida && !reviewExisting);
-  const [showProtection, setShowProtection] = useState(false);
+  // Campos de la vieja pantalla "Maqueta o referencia" (eliminada — ver
+  // context.md, bloque "Limpiar el flujo de creación musical"): ya no hay
+  // forma de crearlos desde acá (sin adjuntar archivo/audio, sin pegar un
+  // link), pero un pedido guardado antes de este bloque los conserva tal
+  // cual al pasar por ContextStep de nuevo — sólo lectura/pass-through,
+  // nunca estado editable ni una fase propia.
+  const legacyReferenciaLink = initialContext?.referenciaLink ?? null;
+  const legacyArchivoAdjunto = !!initialContext?.archivoAdjunto;
+  const legacyArchivoNombre = initialContext?.archivoNombre ?? null;
+  const legacyAudioAdjunto = !!initialContext?.audioAdjunto;
   // context.generos (legacy) ya no tiene una pantalla propia acá: se
   // conserva tal cual para el matching actual (buildMatchResult, igual que
   // antes), pero la fuente de verdad de la interfaz nueva es musicWorlds.
@@ -495,7 +483,7 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
       ? adaptGenreCodesToMusicWorlds(initialContext?.generos)
       : [];
   const [musicWorlds, setMusicWorlds] = useState(initialMusicWorlds);
-  const [musicWorldsConfirmed, setMusicWorldsConfirmed] = useState(!!initialContext?.musicWorldsConfirmed && !reviewExisting);
+  const [musicWorldsConfirmed, setMusicWorldsConfirmed] = useState(() => resumesAt(resumeAtPhase, "musica", !!initialContext?.musicWorldsConfirmed && !reviewExisting));
   const [musicWorldsUndecided, setMusicWorldsUndecided] = useState(!!initialContext?.musicWorldsUndecided);
   const [musicWorldsWereInferred, setMusicWorldsWereInferred] = useState(false);
   const [otherFieldOpen, setOtherFieldOpen] = useState(!!initialContext?.otherMusicWorld);
@@ -505,17 +493,31 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   // nunca como selección automática (ver contrato del selector aprobado).
   const pinnedArtistIds = findMentionedMusicReferenceIds([classification.originalText, referenciaTexto].filter(Boolean).join(" "));
   const [musicReferenceIds, setMusicReferenceIds] = useState(() => sanitizeStoredMusicReferenceIds(initialContext?.musicReferenceIds));
-  const [musicReferencesConfirmed, setMusicReferencesConfirmed] = useState(!!initialContext?.musicReferencesConfirmed && !reviewExisting);
+  const [musicReferencesConfirmed, setMusicReferencesConfirmed] = useState(() => resumesAt(resumeAtPhase, "artistas", !!initialContext?.musicReferencesConfirmed && !reviewExisting));
   const [musicReferencesUndecided, setMusicReferencesUndecided] = useState(!!initialContext?.musicReferencesUndecided);
-  const fileInputRef = useRef(null);
   const musicWorldsInferenceApplied = useRef(false);
+  // Última fase (no "done") que se mostró — ver goBackToLastContextPhase en
+  // App: al volver desde el resumen, ContextStep se remonta de cero, así que
+  // el padre necesita saber cuál fue la última fase real antes de "done"
+  // para reabrir ahí (resumeAtPhase) en vez de reconstruir desde el
+  // principio. Se actualiza en cada fase que no sea "done" (nunca al
+  // llegar a "done" en sí), así que siempre queda con el valor correcto sin
+  // importar cuántas idas y vueltas hubo dentro de esta misma sesión.
+  const lastPhaseRef = useRef(null);
+
+  // Para "hacer" (modalidad puede ser presencial u online) y para pedidos
+  // puntuales "especial" (sonidista, tuner, etc. — ver Shows en el roadmap):
+  // esta pantalla no pregunta género ni artistas de referencia. La
+  // definición completa de qué preguntar para "especial" es un bloque
+  // aparte (branching Música/Shows); por ahora sólo evita mostrar prompts
+  // musicales que no aplican a un pedido puntual.
+  const asksAboutMusic = tipo !== "especial";
 
   const needsModalidad = tipo === "hacer" && (!modalidadElegida || !modalidadReviewed);
   const needsUbicacionFranja = (tipo === "grabar" || (tipo === "hacer" && modalidadElegida === "presencial")) && (!ubicacion || timeSlots.length === 0 || !locationReviewed);
   const needsDatoFaltante = tipo === "especial" && (datos_faltantes || []).includes("fecha_hora") && !datoFaltanteConfirmado;
-  const needsMusicWorlds = !musicWorldsConfirmed;
-  const needsMusicReferences = !musicReferencesConfirmed;
-  const needsReferencia = !referenciaTexto && !referenciaConfirmada;
+  const needsMusicWorlds = asksAboutMusic && !musicWorldsConfirmed;
+  const needsMusicReferences = asksAboutMusic && !musicReferencesConfirmed;
 
   let phase = "done";
   if (needsModalidad) phase = "modalidad";
@@ -523,31 +525,67 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   else if (needsDatoFaltante) phase = "dato_faltante";
   else if (needsMusicWorlds) phase = "musica";
   else if (needsMusicReferences) phase = "artistas";
-  else if (needsReferencia) phase = "referencia";
+
+  // Orden real de las fases que aplican a este pedido puntual, en el mismo
+  // orden que la cadena de arriba — equivale a la pila de fases visitadas
+  // (push implícito al confirmar una fase y avanzar, pop al volver, ver
+  // goToPreviousPhase). Se recalcula en cada render a partir del mismo
+  // estado que ya decide `phase`, así nunca puede desincronizarse de él.
+  const phaseOrder = [];
+  if (tipo === "hacer") phaseOrder.push("modalidad");
+  if (tipo === "grabar" || (tipo === "hacer" && modalidadElegida === "presencial")) phaseOrder.push("ubicacion_franja");
+  if (tipo === "especial" && (datos_faltantes || []).includes("fecha_hora")) phaseOrder.push("dato_faltante");
+  if (asksAboutMusic) phaseOrder.push("musica", "artistas");
+
+  // Flecha "‹" de ContextStep: un paso atrás dentro del flujo, no "abandonar
+  // todo el alta". Sólo en la primera fase que realmente aplica delega en
+  // onBack (vuelve al compositor de texto libre, con el texto intacto — ver
+  // goBackToStart en App). En cualquier otra fase, "des-confirma" únicamente
+  // la fase inmediatamente anterior: como esa fase es la que ya se había
+  // completado para llegar a la actual, sus datos siguen ahí tal cual.
+  function goToPreviousPhase() {
+    const idx = phaseOrder.indexOf(phase);
+    if (idx <= 0) {
+      onBack();
+      return;
+    }
+    const previousPhase = phaseOrder[idx - 1];
+    if (previousPhase === "modalidad") setModalidadReviewed(false);
+    else if (previousPhase === "ubicacion_franja") setLocationReviewed(false);
+    else if (previousPhase === "dato_faltante") setDatoFaltanteConfirmado(false);
+    else if (previousPhase === "musica") setMusicWorldsConfirmed(false);
+    else if (previousPhase === "artistas") setMusicReferencesConfirmed(false);
+  }
+
+  useEffect(() => {
+    if (phase !== "done") lastPhaseRef.current = phase;
+  }, [phase]);
 
   useEffect(() => {
     if (phase === "done") {
-      onComplete({
-        modalidad: modalidadElegida,
-        ubicacion,
-        coordinates,
-        timeSlots,
-        datoFaltanteTexto: datoFaltanteTexto || null,
-        datoFaltanteConfirmado,
-        referenciaLink: referenciaLink.trim() || null,
-        archivoAdjunto,
-        archivoNombre,
-        audioAdjunto,
-        referenciaOfrecida: true,
-        generos,
-        musicWorlds,
-        musicWorldsConfirmed: true,
-        musicWorldsUndecided,
-        otherMusicWorld: otherFieldOpen && otherMusicWorldText.trim() ? otherMusicWorldText.trim() : null,
-        musicReferenceIds,
-        musicReferencesConfirmed: true,
-        musicReferencesUndecided,
-      });
+      onComplete(
+        {
+          modalidad: modalidadElegida,
+          ubicacion,
+          coordinates,
+          timeSlots,
+          datoFaltanteTexto: datoFaltanteTexto || null,
+          datoFaltanteConfirmado,
+          referenciaLink: legacyReferenciaLink,
+          archivoAdjunto: legacyArchivoAdjunto,
+          archivoNombre: legacyArchivoNombre,
+          audioAdjunto: legacyAudioAdjunto,
+          generos,
+          musicWorlds,
+          musicWorldsConfirmed: true,
+          musicWorldsUndecided,
+          otherMusicWorld: otherFieldOpen && otherMusicWorldText.trim() ? otherMusicWorldText.trim() : null,
+          musicReferenceIds,
+          musicReferencesConfirmed: true,
+          musicReferencesUndecided,
+        },
+        lastPhaseRef.current
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
@@ -556,7 +594,7 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
     if (phase !== "musica" || musicWorldsInferenceApplied.current) return;
     musicWorldsInferenceApplied.current = true;
     if (musicWorlds.length > 0 || musicWorldsUndecided) return;
-    const inferenceText = [classification.originalText, classification.summary, referenciaTexto, referenciaLink, archivoNombre].filter(Boolean).join(" ");
+    const inferenceText = [classification.originalText, classification.summary, referenciaTexto, legacyReferenciaLink, legacyArchivoNombre].filter(Boolean).join(" ");
     const inferred = inferInitialMusicWorlds(inferenceText);
     if (inferred.length > 0) {
       setMusicWorlds(inferred);
@@ -566,30 +604,6 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   }, [phase]);
 
   if (phase === "done") return null;
-
-  function toggleArchivo() {
-    if (archivoAdjunto) {
-      setArchivoAdjunto(false);
-      setArchivoNombre(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
-    }
-    fileInputRef.current?.click();
-  }
-  function handleFileSelected(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setArchivoNombre(file.name);
-    setArchivoAdjunto(true);
-  }
-  function toggleAudio() {
-    if (audioAdjunto) return setAudioAdjunto(false);
-    setAdjuntando("audio");
-    setTimeout(() => {
-      setAdjuntando(null);
-      setAudioAdjunto(true);
-    }, 700);
-  }
 
   // Las tres opciones de nivel superior son mutuamente excluyentes: elegir
   // una limpia el valor de `ubicacion` sólo si pertenecía al modo anterior,
@@ -668,7 +682,6 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   }
 
   const qHeading = { fontFamily: EDITORIAL.fontSans, fontWeight: 800, fontSize: 24, color: EDITORIAL.carbon, margin: 0, lineHeight: 1.25, letterSpacing: -0.2 };
-  const hayAlgunaReferencia = referenciaLink.trim() || archivoAdjunto || audioAdjunto;
   // Cuántos de los dos lugares disponibles ya están ocupados: cada mundo
   // elegido cuenta uno, y "Otro" activado (con o sin texto todavía) cuenta
   // el suyo — así no hace falta esperar a que tenga texto para bloquear el
@@ -723,7 +736,7 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
   }
 
   return (
-    <Screen className="q-fade" topSlot={<EditorialBackButton onClick={onBack} />}>
+    <Screen className="q-fade" topSlot={<EditorialBackButton onClick={goToPreviousPhase} />}>
       <div key={phase} className="q-fade">
         {phase === "modalidad" && (
           <>
@@ -1045,44 +1058,6 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
             onContinue={() => setMusicReferencesConfirmed(true)}
           />
         )}
-
-        {phase === "referencia" && (
-          <>
-            <PhaseHeading doodle={<DoodleWaveform width={48} />}>Maqueta o referencia</PhaseHeading>
-            <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13.5, lineHeight: 1.5, margin: "0 0 20px" }}>
-              La usamos para entender sonido, clima y referencias. Después te mostramos qué entendimos para que puedas confirmarlo o cambiarlo.
-            </p>
-
-            <input ref={fileInputRef} type="file" accept="audio/*,.mp3,.wav,.m4a,.aiff,.flac,.zip" onChange={handleFileSelected} style={{ display: "none" }} />
-            <AttachRow label={archivoNombre || "Adjuntar archivo del artista"} attached={archivoAdjunto} busy={adjuntando === "archivo"} onToggle={toggleArchivo} />
-            <AttachRow label="Grabar audio" attached={audioAdjunto} busy={adjuntando === "audio"} onToggle={toggleAudio} />
-            <div style={{ marginTop: 14 }}>
-              <EditorialUnderlineField value={referenciaLink} onChange={(e) => setReferenciaLink(e.target.value)} placeholder="O pegá un enlace (Spotify, etc.)" small />
-            </div>
-
-            <button onClick={() => setShowProtection((v) => !v)} style={{ background: "none", border: "none", padding: "14px 0 0", color: EDITORIAL.muted, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, textDecoration: "underline", textUnderlineOffset: 3, cursor: "pointer" }}>
-              {showProtection ? "Ocultar" : "Cómo cuidamos tu material"}
-            </button>
-            {showProtection && (
-              <div style={{ background: EDITORIAL.surface, border: `1px solid ${EDITORIAL.border}`, padding: 12, marginTop: 10 }}>
-                <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 12.5, lineHeight: 1.5, margin: 0 }}>
-                  No se publica en tu perfil. Sólo debería verlo la gente invitada a este pedido y COLAB no adquiere derechos sobre tu obra. En este prototipo el archivo no sale de tu dispositivo: guardamos únicamente su nombre.
-                </p>
-              </div>
-            )}
-
-            <div style={{ marginTop: 26 }}>
-              <EditorialPrimaryButton full onClick={() => setReferenciaConfirmada(true)}>
-                {hayAlgunaReferencia ? "Continuar" : "Continuar sin agregar nada"}
-              </EditorialPrimaryButton>
-              {!hayAlgunaReferencia && (
-                <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 11.5, lineHeight: 1.45, textAlign: "center", margin: "10px 12px 0" }}>
-                  Sin una referencia, puede llevarnos un poco más de tiempo encontrar productores que encajen.
-                </p>
-              )}
-            </div>
-          </>
-        )}
       </div>
     </Screen>
   );
@@ -1091,7 +1066,7 @@ function ContextStep({ classification, initialContext, reviewExisting, onComplet
 /* ---------------- pantalla: resumen editable ---------------- */
 
 function SummaryScreen({ classification, context, onEdit, onPublish, publishing, publishError, editing }) {
-  const { title, summary, originalText, referencia: referenciaClasif, usedFallback } = classification;
+  const { summary, originalText, referencia: referenciaClasif } = classification;
   const detalles = [];
   if (context.ubicacion) detalles.push(context.ubicacion);
   const timeSlotsLabel = formatTimeSlots(context);
@@ -1131,11 +1106,14 @@ function SummaryScreen({ classification, context, onEdit, onPublish, publishing,
 
   return (
     <Screen className="q-fade" topSlot={<EditorialBackButton onClick={onEdit} />}>
+      {/* La pantalla arranca directamente con la formulación en lenguaje
+          natural del pedido (classification.summary) — antes había además
+          un kicker en mayúscula con classification.title (ej. "GRABAR UNA
+          CANCIÓN") que era redundante con esto mismo. */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        <EditorialLabel>{title}</EditorialLabel>
+        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 16.5, lineHeight: 1.5, margin: "0 0 12px", flex: 1 }}>{summary}</p>
         <DoodleCheck width={30} />
       </div>
-      <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.carbon, fontSize: 16.5, lineHeight: 1.5, margin: "0 0 12px" }}>{summary}</p>
       {refTexto && <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: "0 0 6px" }}>Referencia: {refTexto}</p>}
       {musicaTexto && <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: "0 0 6px" }}>{musicaTexto}</p>}
       {artistasTexto && <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 13, margin: "0 0 6px" }}>{artistasTexto}</p>}
@@ -1149,11 +1127,6 @@ function SummaryScreen({ classification, context, onEdit, onPublish, publishing,
         Tu texto original: “{originalText}”
       </p>
 
-      {usedFallback && (
-        <p style={{ fontFamily: EDITORIAL.fontSans, color: EDITORIAL.muted, fontSize: 11.5, lineHeight: 1.4, marginTop: 10 }}>
-          No pudimos usar la interpretación asistida esta vez — usamos una versión simplificada. Revisá que esté bien antes de publicar.
-        </p>
-      )}
       {publishError && (
         <p style={{ color: EDITORIAL.error, fontFamily: EDITORIAL.fontSans, fontSize: 12.5, marginTop: 14 }}>
           {editing ? "No pudimos actualizar tu pedido. Probá de nuevo." : "No pudimos publicar tu pedido. Probá de nuevo."}
@@ -1169,6 +1142,12 @@ function SummaryScreen({ classification, context, onEdit, onPublish, publishing,
         <EditorialPrimaryButton full disabled={publishing} onClick={onPublish}>
           {publishing ? (editing ? "Actualizando…" : "Publicando…") : editing ? "Actualizar pedido" : "Publicar pedido"}
         </EditorialPrimaryButton>
+        {/* Acción secundaria: vuelve a la última fase editable del flujo sin
+            perder nada ya cargado (ni el draft ni la interpretación) y sin
+            publicar — mismo handler que la flecha de arriba (onEdit). */}
+        <div style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
+          <EditorialTextLink disabled={publishing} onClick={onEdit}>Editar pedido</EditorialTextLink>
+        </div>
       </div>
     </Screen>
   );
@@ -1744,6 +1723,12 @@ export default function App() {
   const [contextReviewRequired, setContextReviewRequired] = useState(false);
   const [editingFromType, setEditingFromType] = useState(null);
   const [reviewingEdit, setReviewingEdit] = useState(false);
+  // Última fase de ContextStep mostrada antes de llegar al resumen — la usa
+  // goBackToLastContextPhase (volver desde SummaryScreen o "Editar pedido")
+  // para reabrir ContextStep justo donde se lo dejó, en vez de reiniciar
+  // todo el flujo desde el compositor de texto libre (eso es lo que hacía
+  // goBackToStart, pensado para "abandonar el paso actual", no para esto).
+  const [contextLastPhase, setContextLastPhase] = useState(null);
   const [editingLiveRequestId, setEditingLiveRequestId] = useState(null);
   const [activeTab, setActiveTab] = useState("inicio");
   const [startedCreating, setStartedCreating] = useState(false);
@@ -1812,6 +1797,9 @@ export default function App() {
       setContextReviewRequired(true);
       setEditingFromType(null);
       setStartedCreating(true);
+      // Nueva clasificación: cualquier "última fase" que se recordara de una
+      // sesión anterior de ContextStep ya no corresponde a este pedido.
+      setContextLastPhase(null);
       return true;
     } catch (e) {
       setError("No pudimos interpretar el pedido. Probá de nuevo.");
@@ -1821,10 +1809,11 @@ export default function App() {
     }
   }
 
-  function handleContextComplete(ctx) {
+  function handleContextComplete(ctx, lastPhase) {
     setContext(ctx);
     setContextReviewRequired(false);
     setReviewingEdit(false);
+    setContextLastPhase(lastPhase ?? null);
   }
 
   // Descarta un pedido nuevo (no una edición) que todavía no se publicó.
@@ -1839,14 +1828,28 @@ export default function App() {
     setContextReviewRequired(false);
     setEditingFromType(null);
     setReviewingEdit(false);
+    setContextLastPhase(null);
     setStartedCreating(false);
     setActiveTab("inicio");
   }
 
+  // Abandona la fase actual de ContextStep y vuelve al compositor de texto
+  // libre (StartScreen), con el texto tal cual quedó — se llama sólo desde
+  // la primera fase real de ContextStep (ver goToPreviousPhase ahí), nunca
+  // como "un paso atrás" genérico dentro del resto del flujo.
   function goBackToStart() {
     setEditingFromType(classification?.tipo || null);
     setReviewingEdit(true);
     setClassification(null);
+    setContextReviewRequired(true);
+    setContextLastPhase(null);
+  }
+
+  // Vuelve del resumen (o de "Editar pedido" ahí mismo) a la última fase
+  // editable de ContextStep, sin tocar classification/context ni disparar
+  // una nueva interpretación: a diferencia de goBackToStart, el draft y la
+  // interpretación quedan exactamente como estaban, y nada se publica.
+  function goBackToLastContextPhase() {
     setContextReviewRequired(true);
   }
 
@@ -1881,6 +1884,7 @@ export default function App() {
     setReviewingEdit(false);
     setEditingFromType(null);
     setEditingLiveRequestId(null);
+    setContextLastPhase(null);
     setStartedCreating(false);
   }
 
@@ -1946,6 +1950,7 @@ export default function App() {
     setEditingFromType(request.tipo);
     setReviewingEdit(true);
     setContextReviewRequired(true);
+    setContextLastPhase(null);
     setStartedCreating(true);
   }
 
@@ -2290,6 +2295,7 @@ export default function App() {
     setContextReviewRequired(false);
     setEditingFromType(null);
     setReviewingEdit(false);
+    setContextLastPhase(null);
     setText("");
   }
 
@@ -2398,13 +2404,22 @@ export default function App() {
         publishing={publishing}
         publishError={publishError}
         editing={!!editingLiveRequestId}
-        onEdit={goBackToStart}
+        onEdit={goBackToLastContextPhase}
         onPublish={editingLiveRequestId ? handleUpdateRequest : handlePublish}
       />
     );
   } else if (classification) {
     creationFlowActive = true;
-    body = <ContextStep classification={classification} initialContext={context} reviewExisting={reviewingEdit} onComplete={handleContextComplete} onBack={goBackToStart} />;
+    body = (
+      <ContextStep
+        classification={classification}
+        initialContext={context}
+        reviewExisting={reviewingEdit}
+        resumeAtPhase={contextLastPhase}
+        onComplete={handleContextComplete}
+        onBack={goBackToStart}
+      />
+    );
   } else if (startedCreating) {
     // Se volvió al primer paso (texto libre) desde ContextStep, editando un
     // pedido existente o re-escribiendo uno nuevo antes de reclasificar.
